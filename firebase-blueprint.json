@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "Setting": {
+      "title": "Setting",
+      "description": "Configurações gerais para marca, cores, mensagens de carrossel, introdução e WhatsApp.",
+      "type": "object",
+      "properties": {
+        "logo": {
+          "type": "string",
+          "description": "Logo em Base64 ou URL direta"
+        },
+        "primaryColor": {
+          "type": "string",
+          "description": "Código de cor hex para botões, bordas e destaque"
+        },
+        "brandName": {
+          "type": "string",
+          "description": "Nome fantasia do estabelecimento"
+        }
+      }
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Um item ou produto disponível para compra no catálogo.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "isActive": { "type": "boolean" },
+        "categoryId": { "type": "string" }
+      }
+    },
+    "Category": {
+      "title": "Category",
+      "description": "Filtragem que agrupa produtos por tipo.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "order": { "type": "number" }
+      }
+    },
+    "Side": {
+      "title": "Side",
+      "description": "Opções de acompanhamento ou complementos adicionais.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "price": { "type": "number" }
+      }
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Registro de compras efetuadas por clientes enviadas ao painel.",
+      "type": "object",
+      "properties": {
+        "customerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "total": { "type": "number" }
+      }
+    }
+  },
+  "firestore": {
+    "/configuracoes/{configId}": {
+      "schema": "Setting",
+      "description": "Armazena as configurações visuais e operacionais globais do sistema"
+    },
+    "/produtos/{produtoId}": {
+      "schema": "Product",
+      "description": "Armazena as informações de cardápio"
+    },
+    "/categorias/{categoriaId}": {
+      "schema": "Category",
+      "description": "Categorias de produtos para ordenação"
+    },
+    "/acompanhamentos/{acompanhamentoId}": {
+      "schema": "Side",
+      "description": "Acompanhamentos ou coberturas"
+    },
+    "/pedidos/{pedidoId}": {
+      "schema": "Order",
+      "description": "Armazena os pedidos e dados de contato de clientes"
+    }
+  }
+}

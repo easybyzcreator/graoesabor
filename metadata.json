@@ -1,0 +1,6 @@
+{
+  "name": "Grão & Sabor",
+  "description": "Cardápio Digital e Sistema de Pedidos Grão & Sabor.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,74 @@
+@import url('https://fonts.googleapis.com/css2?family=Great+Vibes&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400;1,700&family=Lora:ital,wght@0,400..700;1,400..700&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-baskerville: "Libre Baskerville", Baskerville, Georgia, serif;
+  --font-sans: "Lora", Georgia, serif;
+  --font-body: "Lora", Georgia, serif;
+  --font-lora: "Lora", Georgia, serif;
+  --font-playfair: "Playfair Display", Georgia, serif;
+  --font-script: "Great Vibes", cursive;
+  --font-cursive: "Great Vibes", cursive;
+}
+
+body {
+  font-family: 'Lora', Georgia, serif;
+  color: var(--text-color, #111827);
+  background-color: #ece6db;
+}
+
+input, textarea, select {
+  font-family: 'Lora', Georgia, serif;
+  color: #111827; /* Force dark text for form fields */
+}
+
+/* Hide spin-buttons for input type=number */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.glass {
+  @apply backdrop-blur-lg border border-white/20;
+  background-color: var(--glass-color, rgba(255, 255, 255, 0.4));
+  -webkit-backdrop-filter: blur(16px);
+  backdrop-filter: blur(16px);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Playfair Display', Georgia, serif;
+  color: var(--text-color, #111827);
+}
+
+.font-script,
+.font-cursive,
+.font-great-vibes {
+  font-family: 'Great Vibes', cursive !important;
+}
+
+.font-baskerville {
+  font-family: 'Libre Baskerville', Baskerville, Georgia, serif !important;
+}
+
+.font-playfair {
+  font-family: 'Playfair Display', Georgia, serif !important;
+}
+
+.font-lora {
+  font-family: 'Lora', Georgia, serif !important;
+}
+
+.force-dark-headings h1,
+.force-dark-headings h2,
+.force-dark-headings h3,
+.force-dark-headings h4,
+.force-dark-headings h5,
+.force-dark-headings h6 {
+  color: var(--modal-heading-color, var(--text-color, #000000));
+}
