@@ -421,7 +421,7 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
         {viewMode === 'grid' && (
           <div className="border border-gray-200/80 rounded-2xl overflow-hidden bg-white shadow-sm">
             <div className="overflow-x-auto">
-              <div className="min-w-[840px] max-h-[580px] overflow-y-auto">
+              <div className="min-w-[940px] max-h-[580px] overflow-y-auto">
                 <table className="w-full table-fixed border-collapse">
                   <thead className="sticky top-0 z-10 bg-gray-50 shadow-xs">
                     <tr className="border-b border-gray-200">
@@ -503,45 +503,54 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
                                   return (
                                     <motion.button
                                       key={order.id}
-                                      whileHover={{ scale: 1.02 }}
+                                      whileHover={{ scale: 1.01 }}
                                       whileTap={{ scale: 0.98 }}
                                       onClick={() => setSelectedOrder(order)}
-                                      className={`w-full text-left p-2 rounded-xl border shadow-xs transition-all cursor-pointer flex flex-col gap-1 ${
+                                      className={`w-full text-left p-1.5 sm:p-2 rounded-xl border shadow-xs transition-all cursor-pointer flex flex-col gap-1 overflow-hidden box-border ${
                                         isCardGreen
                                           ? 'bg-emerald-50/95 border-emerald-400 text-emerald-950 hover:bg-emerald-100 ring-1 ring-emerald-200'
                                           : 'bg-amber-50/95 border-amber-300 text-amber-950 hover:bg-amber-100/90 ring-1 ring-amber-200'
                                       }`}
                                     >
-                                      <div className="flex items-center justify-between gap-1">
-                                        <span className={`font-extrabold text-[11px] truncate uppercase ${
+                                      {/* Linha 1: Cliente e Valor */}
+                                      <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                                        <span className={`font-extrabold text-[10.5px] sm:text-[11px] truncate uppercase flex-1 min-w-0 ${
                                           isCardGreen ? 'text-emerald-950' : 'text-amber-950'
                                         }`}>
                                           {order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName}
                                         </span>
-                                        <span className={`font-black text-[11px] shrink-0 ${
+                                        <span className={`font-black text-[10.5px] sm:text-[11px] shrink-0 ${
                                           isCardGreen ? 'text-emerald-900' : 'text-amber-900'
                                         }`}>
                                           {formatCurrency(order.total)}
                                         </span>
                                       </div>
-                                      <div className="flex items-center gap-1 text-[10px] font-semibold text-gray-600">
-                                        <span>{isPickup ? 'Retirada' : 'Entrega'}</span>
-                                        {isDelivered && (
-                                          <span className="text-emerald-700 font-extrabold text-[10px]" title="Entregue">✓ Entregue</span>
-                                        )}
-                                        {isPaidFull ? (
-                                          <span className="ml-auto text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-600 text-white shadow-2xs leading-none">
-                                            ✓ PAGO
-                                          </span>
-                                        ) : isPaidHalf ? (
-                                          <span className="ml-auto text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white shadow-2xs leading-none">
-                                            50%
-                                          </span>
-                                        ) : (
-                                          <span className="ml-auto text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 leading-none">
-                                            NÃO PAGO
-                                          </span>
-                                        )}
+
+                                      {/* Linha 2: Tipo de entrega e Status de Pagamento - flex-wrap para NUNCA vazar fora do box */}
+                                      <div className="flex items-center justify-between gap-1 flex-wrap w-full text-[9.5px] sm:text-[10px] font-semibold text-gray-600">
+                                        <div className="flex items-center gap-1 shrink-0 flex-wrap">
+                                          <span>{isPickup ? 'Retirada' : 'Entrega'}</span>
+                                          {isDelivered && (
+                                            <span className="text-emerald-700 font-extrabold text-[9px] sm:text-[9.5px]" title="Entregue">
+                                              ✓ Entregue
+                                            </span>
+                                          )}
+                                        </div>
+                                        <div className="shrink-0 ml-auto">
+                                          {isPaidFull ? (
+                                            <span className="inline-block text-[8.5px] sm:text-[9px] font-black px-1.5 py-0.5 rounded bg-emerald-600 text-white shadow-2xs leading-none whitespace-nowrap">
+                                              ✓ PAGO
+                                            </span>
+                                          ) : isPaidHalf ? (
+                                            <span className="inline-block text-[8.5px] sm:text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-white shadow-2xs leading-none whitespace-nowrap">
+                                              50%
+                                            </span>
+                                          ) : (
+                                            <span className="inline-block text-[8.5px] sm:text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-50 text-rose-700 border border-rose-200 leading-none whitespace-nowrap">
+                                              NÃO PAGO
+                                            </span>
+                                          )}
+                                        </div>
                                       </div>
                                     </motion.button>
                                   );
@@ -612,38 +621,38 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
                           <div
                             key={order.id}
                             onClick={() => setSelectedOrder(order)}
-                            className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 shadow-2xs ${
+                            className={`p-3 rounded-xl border transition-all cursor-pointer space-y-1.5 shadow-2xs overflow-hidden ${
                               isCardGreen
                                 ? 'bg-emerald-50/80 border-emerald-300 hover:bg-emerald-100/80'
                                 : 'bg-amber-50/80 border-amber-300 hover:bg-amber-100/80'
                             }`}
                           >
-                            <div className="flex items-center justify-between">
-                              <span className="font-extrabold text-xs text-gray-900">
+                            <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                              <span className="font-extrabold text-xs text-gray-900 truncate flex-1 min-w-0">
                                 {order.customerName}
                               </span>
-                              <span className={`font-black text-xs ${
+                              <span className={`font-black text-xs shrink-0 ${
                                 isPaidFull ? 'text-emerald-900' : isPaidHalf ? 'text-amber-900' : 'text-gray-900'
                               }`}>
                                 {formatCurrency(order.total)}
                               </span>
                             </div>
-                            <div className="flex items-center justify-between text-[11px] text-gray-500 font-medium">
-                              <span className="flex items-center gap-1">
+                            <div className="flex items-center justify-between gap-1 flex-wrap text-[11px] text-gray-500 font-medium">
+                              <span className="flex items-center gap-1 shrink-0">
                                 {isPickup ? <Store size={13} className="text-amber-700" /> : <Truck size={13} className="text-amber-800" />}
                                 {isPickup ? 'Retirada' : 'Entrega'} • {timeStr}
                               </span>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 shrink-0 ml-auto">
                                 {isPaidFull ? (
-                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white">
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-emerald-600 text-white whitespace-nowrap">
                                     ✓ Pago
                                   </span>
                                 ) : isPaidHalf ? (
-                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-500 text-white">
+                                  <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-amber-500 text-white whitespace-nowrap">
                                      50% Pago
                                   </span>
                                 ) : (
-                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200">
+                                  <span className="text-[9px] font-bold px-2 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 whitespace-nowrap">
                                     Não Pago
                                   </span>
                                 )}
