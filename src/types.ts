@@ -325,6 +325,8 @@ export interface Settings {
   catalog6TagActive?: boolean;
   // Instruções de pós-venda para clientes (WhatsApp)
   quickInstructions?: QuickInstruction[];
+  // Formato de Impressão de Comandas e Listas
+  printerFormat?: 'a4' | '58mm' | '80mm';
 }
 
 export interface QuickInstruction {

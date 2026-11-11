@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, 
-  query, orderBy, writeBatch 
+  query, orderBy, writeBatch, serverTimestamp 
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { Product, Order, Settings, Category, Side, ImageGallery, VariableCost, DeliveryRange, ProductSize, QuickInstruction } from '../types';
@@ -1657,6 +1657,34 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     }
   };
 
+  const copyLink = () => {
+    const url = `${window.location.origin}/?slug=${settings?.slug || 'easy-cake-menu'}`;
+    navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const toggleOrder = (orderId: string) => {
+    setExpandedOrders(prev => prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]);
+  };
+
+  const handleEditOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isEditingOrder?.id) return;
+    try {
+      const orderRef = doc(db, 'pedidos', isEditingOrder.id);
+      await updateDoc(orderRef, {
+        ...editOrderForm,
+        updatedAt: serverTimestamp()
+      });
+      toast.success('Pedido atualizado com sucesso!');
+      setIsEditingOrder(null);
+    } catch (err) {
+      console.error('Erro ao atualizar pedido:', err);
+      toast.error('Erro ao atualizar pedido.');
+    }
+  };
+
   const deleteCustomer = async (customer: any) => {
     const customerId = customer.phone || customer.email || customer.name;
     const customerOrders = orders.filter(o => (o.phone || o.email || o.customerName) === customerId);
@@ -1974,7 +2002,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
     iframe = document.createElement('iframe');
     iframe.id = 'print-iframe';
-    iframe.setAttribute('style', 'position: fixed; right: 0; bottom: 0; width: 0; height: 0; border: 0;');
+    iframe.setAttribute('style', 'position: fixed; right: -9999px; bottom: -9999px; width: 800px; height: 1000px; border: 0; visibility: hidden;');
     document.body.appendChild(iframe);
 
     const iframeDoc = iframe.contentWindow?.document || iframe.contentDocument;
@@ -1989,13 +2017,110 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
       }
-    }, 250);
+    }, 350);
   };
 
   const printOrdersList = () => {
+    const format = settings?.printerFormat || 'a4';
     const listTitle = orderTypeTab === 'b2b' 
       ? 'PEDIDOS CORPORATIVOS (B2B)' 
       : 'PEDIDOS VAREJO (RETAIL)';
+    const totalSum = filteredOrders.reduce((sum, o) => sum + o.total, 0);
+    const brand = settings?.brandName || 'Grão & Sabor';
+
+    if (format === 'a4') {
+      const rowsHtml = filteredOrders.map((order, index) => {
+        const name = order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName;
+        const deliveryDate = order.pickupDate ? order.pickupDate : 'N/A';
+        const itemsSummary = order.items.map(item => `${item.quantity}x ${item.title}`).join(', ');
+
+        return `
+          <tr>
+            <td style="font-weight: bold; text-align: center; width: 40px;">#${index + 1}</td>
+            <td style="font-weight: 700;">${name.toUpperCase()}</td>
+            <td>${order.phone || '-'}</td>
+            <td>${order.deliveryType === 'pickup' ? 'Retirada' : 'Entrega'} • ${deliveryDate}</td>
+            <td style="font-size: 11px; color: #4b5563;">${itemsSummary}</td>
+            <td style="text-align: right; font-weight: bold;">${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}</td>
+          </tr>
+        `;
+      }).join('');
+
+      printWithIframe(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>${listTitle}</title>
+            <style>
+              @page { size: A4 portrait; margin: 12mm 15mm; }
+              @media print {
+                html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              }
+              * { box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
+                margin: 0 auto;
+                max-width: 720px;
+                padding: 10px;
+                font-size: 12.5px;
+                line-height: 1.4;
+              }
+              .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #111827;
+                padding-bottom: 8px;
+                margin-bottom: 12px;
+              }
+              .brand { font-size: 20px; font-weight: 800; text-transform: uppercase; color: #111827; margin: 0; }
+              .meta { font-size: 11px; color: #6b7280; text-align: right; }
+              table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+              th { background: #f3f4f6; border-top: 1px solid #d1d5db; border-bottom: 2px solid #111827; padding: 7px 8px; font-size: 11px; font-weight: 800; text-transform: uppercase; text-align: left; }
+              td { padding: 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+              .total-box { margin-top: 14px; text-align: right; font-size: 16px; font-weight: 800; border-top: 2px solid #111827; padding-top: 8px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div>
+                <h1 class="brand">${brand}</h1>
+                <div style="font-weight: 700; font-size: 13px; color: #374151; margin-top: 2px;">${listTitle}</div>
+              </div>
+              <div class="meta">
+                <div>Data: ${new Date().toLocaleString('pt-BR')}</div>
+                <div style="font-weight: 600;">Total: ${filteredOrders.length} pedido(s)</div>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: center; width: 40px;">#</th>
+                  <th>Cliente</th>
+                  <th>Telefone</th>
+                  <th>Entrega / Data</th>
+                  <th>Itens</th>
+                  <th style="text-align: right; width: 100px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${rowsHtml || '<tr><td colspan="6" style="text-align: center; padding: 20px; color: #9ca3af;">Nenhum pedido encontrado.</td></tr>'}
+              </tbody>
+            </table>
+            <div class="total-box">
+              VALOR TOTAL GERAL: ${currencySymbol} ${totalSum.toFixed(2).replace('.', ',')}
+            </div>
+          </body>
+        </html>
+      `);
+      return;
+    }
+
+    const is80 = format === '80mm';
+    const paperWidth = is80 ? '80mm' : '58mm';
+    const printWidth = is80 ? '72mm' : '48mm';
 
     const contentHtml = filteredOrders.map((order, index) => {
       const itemsText = order.items.map(item => `  ${item.quantity}x ${item.title}${item.selectedSize ? ` (${item.selectedSize.name})` : ''}`).join('\n');
@@ -2015,33 +2140,30 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       `;
     }).join('');
 
-    const totalSum = filteredOrders.reduce((sum, o) => sum + o.total, 0);
-
     printWithIframe(`
       <html>
         <head>
           <title>${listTitle}</title>
           <style>
-            @page { size: 58mm auto; margin: 0; }
+            @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: 58mm !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
             }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 48mm; 
-              max-width: 48mm;
+              width: ${printWidth}; 
+              max-width: ${printWidth};
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: 10px; 
+              font-size: ${is80 ? '11px' : '10px'}; 
               color: #000;
               line-height: 1.25;
             }
             .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: 11px; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
             .header p { font-size: 8.5px; margin: 0; }
-            .printer-badge { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
             .order-block { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 6px; }
-            .order-header { font-weight: bold; font-size: 10.5px; }
+            .order-header { font-weight: bold; font-size: ${is80 ? '11.5px' : '10.5px'}; }
             .order-details { font-size: 9px; margin: 2px 0; }
             .order-items { white-space: pre-wrap; font-size: 9.5px; margin: 3px 0; background: #fafafa; padding: 2px; }
             .order-total { text-align: right; font-weight: bold; font-size: 10px; }
@@ -2050,7 +2172,6 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="header">
-            <div class="printer-badge">[POS-5890C • 58MM]</div>
             <h1>${listTitle}</h1>
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total de Pedidos: ${filteredOrders.length}</p>
@@ -2130,29 +2251,105 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       `;
     }).join('');
 
+    const format = settings?.printerFormat || 'a4';
+    const is80 = format === '80mm';
+    const paperWidth = is80 ? '80mm' : '58mm';
+    const printWidth = is80 ? '72mm' : '48mm';
+    const brand = settings?.brandName || 'Grão & Sabor';
+
+    if (format === 'a4') {
+      printWithIframe(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Cardápio de Produtos - ${brand}</title>
+            <style>
+              @page { size: A4 portrait; margin: 12mm 15mm; }
+              @media print {
+                html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              }
+              * { box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
+                margin: 0 auto;
+                max-width: 720px;
+                padding: 10px;
+                font-size: 12.5px;
+                line-height: 1.4;
+              }
+              .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #111827;
+                padding-bottom: 8px;
+                margin-bottom: 14px;
+              }
+              .brand { font-size: 22px; font-weight: 800; text-transform: uppercase; margin: 0; }
+              .meta { font-size: 11px; color: #6b7280; text-align: right; }
+              .category-block { margin-bottom: 16px; }
+              .category-title { font-size: 14px; font-weight: 800; text-transform: uppercase; background: #f3f4f6; padding: 6px 10px; border-radius: 6px; border-left: 4px solid #111827; margin-bottom: 8px; }
+              table { width: 100%; border-collapse: collapse; }
+              td { padding: 6px 8px; border-bottom: 1px solid #e5e7eb; vertical-align: top; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div>
+                <h1 class="brand">${brand}</h1>
+                <div style="font-size: 13px; font-weight: 700; color: #374151; margin-top: 2px;">Cardápio Geral de Produtos</div>
+              </div>
+              <div class="meta">
+                <div>Data: ${new Date().toLocaleString('pt-BR')}</div>
+                <div style="font-weight: 600;">Total: ${products.length} itens</div>
+              </div>
+            </div>
+            ${groupedProducts.map(group => `
+              <div class="category-block">
+                <div class="category-title">${group.categoryTitle}</div>
+                <table>
+                  <tbody>
+                    ${group.products.map(p => `
+                      <tr>
+                        <td style="font-weight: 700; width: 45%;">${p.title}</td>
+                        <td style="font-size: 11px; color: #4b5563;">${p.description || '-'}</td>
+                        <td style="text-align: right; font-weight: bold; width: 110px;">${currencySymbol} ${p.price.toFixed(2).replace('.', ',')}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `).join('') || '<div style="text-align: center; padding: 20px; color: #9ca3af;">Nenhum produto cadastrado.</div>'}
+          </body>
+        </html>
+      `);
+      return;
+    }
+
     printWithIframe(`
       <html>
         <head>
           <title>Cardápio Completo</title>
           <style>
-            @page { size: 58mm auto; margin: 0; }
+            @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: 58mm !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
             }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 48mm; 
-              max-width: 48mm; 
+              width: ${printWidth}; 
+              max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: 10px; 
+              font-size: ${is80 ? '11px' : '10px'}; 
               color: #000;
               line-height: 1.25;
             }
             .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: 11px; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
             .header p { font-size: 8.5px; margin: 0; }
-            .printer-badge { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
             .category-block { margin-top: 8px; }
             .category-title { font-weight: bold; font-size: 10px; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
             .product-block { margin-bottom: 6px; border-bottom: 1px dashed #ccc; padding-bottom: 3px; }
@@ -2164,8 +2361,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="header">
-            <div class="printer-badge">[POS-5890C • 58MM]</div>
-            <h1>${settings?.brandName || 'Grão & Sabor'}</h1>
+            <h1>${brand}</h1>
             <p>Relatório de Produtos</p>
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total: ${products.length} itens</p>
@@ -2177,9 +2373,117 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
   };
 
   const printProductionSummary = () => {
+    const format = settings?.printerFormat || 'a4';
+    const is80 = format === '80mm';
+    const paperWidth = is80 ? '80mm' : '58mm';
+    const printWidth = is80 ? '72mm' : '48mm';
+    const brand = settings?.brandName || 'Grão & Sabor';
+
     const listTitle = orderTypeTab === 'b2b'
-      ? 'RESUMO PRODUÇÃO - B2B'
-      : 'RESUMO PRODUÇÃO - VAREJO';
+      ? 'RESUMO DE PRODUÇÃO - B2B'
+      : 'RESUMO DE PRODUÇÃO - VAREJO';
+
+    const dateRangeText = (startDate || endDate) 
+      ? `Período: ${startDate || 'Início'} até ${endDate || 'Fim'}`
+      : 'Todos os Pedidos';
+
+    if (format === 'a4') {
+      const itemsRows = Object.entries(batchSummary.items).map(([title, qty]) => `
+        <tr>
+          <td style="font-weight: 700;">${title}</td>
+          <td style="text-align: center; font-weight: 800; font-size: 14px; width: 100px;">${qty}x</td>
+        </tr>
+      `).join('');
+
+      const sidesRows = Object.entries(batchSummary.sides).map(([name, qty]) => `
+        <tr>
+          <td style="font-weight: 600;">${name}</td>
+          <td style="text-align: center; font-weight: 800; font-size: 14px; width: 100px;">${qty}x</td>
+        </tr>
+      `).join('');
+
+      printWithIframe(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>${listTitle}</title>
+            <style>
+              @page { size: A4 portrait; margin: 12mm 15mm; }
+              @media print {
+                html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              }
+              * { box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
+                margin: 0 auto;
+                max-width: 720px;
+                padding: 10px;
+                font-size: 13px;
+                line-height: 1.45;
+              }
+              .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #111827;
+                padding-bottom: 8px;
+                margin-bottom: 14px;
+              }
+              .brand { font-size: 22px; font-weight: 800; text-transform: uppercase; margin: 0; }
+              .meta { font-size: 11px; color: #6b7280; text-align: right; }
+              .section-title { font-size: 13px; font-weight: 800; text-transform: uppercase; background: #f3f4f6; padding: 6px 10px; border-radius: 6px; border-left: 4px solid #111827; margin: 16px 0 8px 0; }
+              table { width: 100%; border-collapse: collapse; }
+              th { background: #f9fafb; border-bottom: 2px solid #111827; padding: 7px 10px; font-size: 11px; font-weight: 800; text-transform: uppercase; text-align: left; }
+              td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div>
+                <h1 class="brand">${brand}</h1>
+                <div style="font-weight: 700; font-size: 14px; color: #374151; margin-top: 2px;">${listTitle}</div>
+                <div style="font-size: 11.5px; color: #4b5563; margin-top: 2px;">${dateRangeText}</div>
+              </div>
+              <div class="meta">
+                <div>Data: ${new Date().toLocaleString('pt-BR')}</div>
+                <div style="font-weight: 600;">Status: Produção</div>
+              </div>
+            </div>
+
+            <div class="section-title">TOTAL DE ITENS PARA PRODUÇÃO</div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Item / Produto</th>
+                  <th style="text-align: center; width: 100px;">Quantidade</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRows || '<tr><td colspan="2" style="text-align: center; padding: 15px; color: #9ca3af;">Nenhum item no período.</td></tr>'}
+              </tbody>
+            </table>
+
+            ${Object.keys(batchSummary.sides).length > 0 ? `
+              <div class="section-title">ACOMPANHAMENTOS</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Acompanhamento</th>
+                    <th style="text-align: center; width: 100px;">Quantidade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${sidesRows}
+                </tbody>
+              </table>
+            ` : ''}
+          </body>
+        </html>
+      `);
+      return;
+    }
 
     const itemsHtml = Object.entries(batchSummary.items).map(([title, qty]) => `
       <div class="summary-row">
@@ -2195,33 +2499,28 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       </div>
     `).join('');
 
-    const dateRangeText = (startDate || endDate) 
-      ? `Período: ${startDate || 'Início'} até ${endDate || 'Fim'}`
-      : 'Todos os Pedidos';
-
     printWithIframe(`
       <html>
         <head>
           <title>${listTitle}</title>
           <style>
-            @page { size: 58mm auto; margin: 0; }
+            @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: 58mm !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
             }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 48mm; 
-              max-width: 48mm; 
+              width: ${printWidth}; 
+              max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: 10px; 
+              font-size: ${is80 ? '11px' : '10px'}; 
               color: #000;
               line-height: 1.25;
             }
             .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: 11px; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
             .header p { font-size: 8.5px; margin: 0; }
-            .printer-badge { font-size: 7.5px; font-weight: bold; margin-bottom: 2px; }
             .section { margin-bottom: 10px; }
             .section-title { font-weight: bold; font-size: 10px; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
             .summary-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #ccc; }
@@ -2231,7 +2530,6 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="header">
-            <div class="printer-badge">[POS-5890C • 58MM]</div>
             <h1>${listTitle}</h1>
             <p>${dateRangeText}</p>
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
@@ -2255,35 +2553,295 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     `);
   };
 
-  const handleEditOrder = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isEditingOrder) return;
-    try {
-      await updateDoc(doc(db, 'pedidos', isEditingOrder.id), editOrderForm);
-      setIsEditingOrder(null);
-    } catch (err) {
-      alert('Erro ao atualizar pedido.');
-    }
-  };
-
-  const toggleOrder = (orderId: string) => {
-    setExpandedOrders(prev => 
-      prev.includes(orderId) 
-        ? prev.filter(id => id !== orderId) 
-        : [...prev, orderId]
-    );
-  };
-
-  const copyLink = () => {
-    const url = `${window.location.origin}/?slug=${settings?.slug || 'easy-menu'}`;
-    navigator.clipboard.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const printOrder = (order: Order) => {
+  const printOrder = (order: Order, formatOverride?: 'a4' | '58mm' | '80mm') => {
+    const format = formatOverride || settings?.printerFormat || 'a4';
     const dateStr = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('pt-BR') : 'N/A';
-    
+    const brand = settings?.brandName || 'Grão & Sabor';
+
+    if (format === 'a4') {
+      const itemsRowsHtml = order.items.map(item => {
+        let optionsHtml = '';
+        if (item.cakeOptions && (item.cakeOptions.size || item.cakeOptions.dough || item.cakeOptions.fillings)) {
+          optionsHtml = `
+            <div class="item-sub">
+              ${item.cakeOptions.size ? `<div><strong>Tamanho:</strong> ${item.cakeOptions.size}</div>` : ''}
+              ${item.cakeOptions.dough ? `<div><strong>Massa:</strong> ${item.cakeOptions.dough}</div>` : ''}
+              ${item.cakeOptions.fillings && item.cakeOptions.fillings.length > 0 ? `<div><strong>Recheios:</strong> ${item.cakeOptions.fillings.join(', ')}</div>` : ''}
+              ${item.cakeOptions.topping ? `<div><strong>Cobertura:</strong> ${item.cakeOptions.topping}</div>` : ''}
+              ${item.cakeOptions.topper ? `<div><strong>Topper:</strong> ${item.cakeOptions.topper}</div>` : ''}
+            </div>
+          `;
+        } else if (item.sandwichOptions && item.sandwichOptions.fillings && item.sandwichOptions.fillings.length > 0) {
+          optionsHtml = `<div class="item-sub"><strong>Recheios:</strong> ${item.sandwichOptions.fillings.join(', ')}</div>`;
+        } else if (item.mealOptions) {
+          optionsHtml = `
+            <div class="item-sub">
+              ${item.mealOptions.removals.length > 0 ? `<div><strong>Remover:</strong> ${item.mealOptions.removals.join(', ')}</div>` : ''}
+              ${item.mealOptions.sides.length > 0 ? `<div><strong>Acompanhamentos:</strong> ${item.mealOptions.sides.map(s => s.name).join(', ')}</div>` : ''}
+            </div>
+          `;
+        }
+
+        const unitPrice = item.price.toFixed(2).replace('.', ',');
+        const totalItemPrice = (item.price * item.quantity).toFixed(2).replace('.', ',');
+
+        return `
+          <tr>
+            <td style="text-align: center; font-weight: bold; width: 45px;">${item.quantity}x</td>
+            <td>
+              <div class="item-title">${item.title}${item.selectedSize ? ` (${item.selectedSize.name})` : ''}</div>
+              ${optionsHtml}
+            </td>
+            <td style="text-align: right; width: 95px;">${currencySymbol} ${unitPrice}</td>
+            <td style="text-align: right; font-weight: bold; width: 105px;">${currencySymbol} ${totalItemPrice}</td>
+          </tr>
+        `;
+      }).join('');
+
+      printWithIframe(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Comanda #${order.id} - ${order.customerName}</title>
+            <style>
+              @page { size: A4 portrait; margin: 12mm 15mm; }
+              @media print {
+                html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              }
+              * { box-sizing: border-box; }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
+                margin: 0 auto;
+                max-width: 680px;
+                padding: 10px;
+                font-size: 13px;
+                line-height: 1.45;
+              }
+              .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: flex-start;
+                border-bottom: 2px solid #111827;
+                padding-bottom: 10px;
+                margin-bottom: 14px;
+              }
+              .brand-title {
+                font-size: 22px;
+                font-weight: 800;
+                color: #111827;
+                text-transform: uppercase;
+                margin: 0;
+                letter-spacing: -0.5px;
+              }
+              .brand-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+              .order-meta { text-align: right; }
+              .order-badge {
+                font-family: monospace;
+                font-weight: 800;
+                font-size: 13px;
+                background: #f3f4f6;
+                border: 1px solid #d1d5db;
+                padding: 3px 8px;
+                border-radius: 5px;
+                display: inline-block;
+              }
+              .order-date { font-size: 11px; color: #6b7280; margin-top: 3px; }
+              .client-box {
+                background: #f9fafb;
+                border: 1px solid #e5e7eb;
+                border-radius: 8px;
+                padding: 10px 14px;
+                margin-bottom: 14px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px 14px;
+              }
+              .client-item strong {
+                font-size: 10px;
+                text-transform: uppercase;
+                color: #6b7280;
+                display: block;
+                margin-bottom: 1px;
+              }
+              .client-item span {
+                font-size: 12.5px;
+                font-weight: 600;
+                color: #111827;
+              }
+              .items-table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-bottom: 14px;
+              }
+              .items-table th {
+                background: #f3f4f6;
+                border-top: 1px solid #d1d5db;
+                border-bottom: 2px solid #111827;
+                padding: 8px 10px;
+                font-size: 11px;
+                font-weight: 800;
+                text-transform: uppercase;
+                color: #374151;
+                text-align: left;
+              }
+              .items-table td {
+                padding: 8px 10px;
+                border-bottom: 1px solid #e5e7eb;
+                font-size: 12.5px;
+                vertical-align: top;
+              }
+              .item-title { font-weight: 700; color: #111827; }
+              .item-sub {
+                font-size: 11px;
+                color: #4b5563;
+                margin-top: 2px;
+                padding-left: 6px;
+                border-left: 2px solid #e5e7eb;
+              }
+              .obs-box {
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                border-left: 4px solid #f59e0b;
+                padding: 9px 12px;
+                border-radius: 6px;
+                margin-bottom: 14px;
+                font-size: 12px;
+              }
+              .obs-box strong {
+                font-size: 10.5px;
+                text-transform: uppercase;
+                color: #92400e;
+                display: block;
+                margin-bottom: 2px;
+              }
+              .totals-box {
+                display: flex;
+                justify-content: flex-end;
+                margin-bottom: 16px;
+              }
+              .totals-table { width: 280px; border-collapse: collapse; }
+              .totals-table td { padding: 4px 6px; font-size: 12.5px; }
+              .totals-table tr.total-row td {
+                border-top: 2px solid #111827;
+                padding-top: 8px;
+                font-size: 17px;
+                font-weight: 800;
+                color: #111827;
+              }
+              .footer {
+                border-top: 1px dashed #d1d5db;
+                padding-top: 10px;
+                text-align: center;
+                font-size: 11px;
+                color: #6b7280;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div>
+                <h1 class="brand-title">${brand}</h1>
+                <div class="brand-sub">Comanda de Pedido</div>
+              </div>
+              <div class="order-meta">
+                <div class="order-badge">#${order.id}</div>
+                <div class="order-date">${dateStr}</div>
+              </div>
+            </div>
+
+            <div class="client-box">
+              <div class="client-item">
+                <strong>Cliente</strong>
+                <span>${order.customerName.toUpperCase()}</span>
+              </div>
+              <div class="client-item">
+                <strong>Telefone</strong>
+                <span>${order.phone || 'Não informado'}</span>
+              </div>
+              <div class="client-item" style="grid-column: span 2;">
+                <strong>Endereço de Entrega / Atendimento</strong>
+                <span>${order.address || (order.deliveryType === 'pickup' ? 'Retirada no Balcão' : 'Não informado')}</span>
+              </div>
+              ${order.birthday ? `
+              <div class="client-item">
+                <strong>Aniversário</strong>
+                <span>${order.birthday}</span>
+              </div>
+              ` : ''}
+              ${order.email ? `
+              <div class="client-item">
+                <strong>E-mail</strong>
+                <span>${order.email}</span>
+              </div>
+              ` : ''}
+              <div class="client-item">
+                <strong>Modalidade</strong>
+                <span>${order.deliveryType === 'pickup' ? 'Retirada no Estabelecimento' : 'Entrega (Delivery)'}</span>
+              </div>
+            </div>
+
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th style="text-align: center; width: 45px;">Qtd</th>
+                  <th>Item / Descrição</th>
+                  <th style="text-align: right; width: 95px;">Unitário</th>
+                  <th style="text-align: right; width: 105px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsRowsHtml}
+              </tbody>
+            </table>
+
+            ${order.observation ? `
+            <div class="obs-box">
+              <strong>Observações do Pedido:</strong>
+              <div>${order.observation}</div>
+            </div>
+            ` : ''}
+
+            <div class="totals-box">
+              <table class="totals-table">
+                ${(order.deliveryFee !== undefined && order.deliveryFee > 0) ? `
+                <tr>
+                  <td style="color: #4b5563;">Subtotal:</td>
+                  <td style="text-align: right; font-weight: 600;">${currencySymbol} ${(order.subtotal || (order.total - order.deliveryFee)).toFixed(2).replace('.', ',')}</td>
+                </tr>
+                <tr>
+                  <td style="color: #4b5563;">Taxa de Entrega:</td>
+                  <td style="text-align: right; font-weight: 600;">+ ${currencySymbol} ${order.deliveryFee.toFixed(2).replace('.', ',')}</td>
+                </tr>
+                ` : order.deliveryType === 'pickup' ? `
+                <tr>
+                  <td style="color: #4b5563;">Entrega:</td>
+                  <td style="text-align: right; font-weight: 600; color: #059669;">Retirada Grátis</td>
+                </tr>
+                ` : ''}
+                <tr class="total-row">
+                  <td>TOTAL:</td>
+                  <td style="text-align: right;">${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}</td>
+                </tr>
+              </table>
+            </div>
+
+            <div class="footer">
+              Obrigado pela preferência! • ${brand}
+            </div>
+          </body>
+        </html>
+      `);
+      return;
+    }
+
+    const is80 = format === '80mm';
+    const paperWidth = is80 ? '80mm' : '58mm';
+    const printWidth = is80 ? '72mm' : '48mm';
+    const bodyFont = is80 ? '11px' : '10px';
+    const titleFont = is80 ? '13px' : '12px';
+
     let itemsHtml = order.items.map(item => {
       let optionsHtml = '';
       if (item.cakeOptions && (item.cakeOptions.size || item.cakeOptions.dough || item.cakeOptions.fillings)) {
@@ -2327,23 +2885,22 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         <head>
           <title>Comanda - ${order.customerName}</title>
           <style>
-            @page { size: 58mm auto; margin: 0; }
+            @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: 58mm !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
             }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 48mm; 
-              max-width: 48mm; 
+              width: ${printWidth}; 
+              max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: 10px; 
+              font-size: ${bodyFont}; 
               color: #000;
               line-height: 1.25;
             }
             .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 6px; }
-            .header h2 { margin: 0; font-size: 12px; text-transform: uppercase; font-weight: bold; }
-            .printer-badge { font-size: 7.5px; font-weight: bold; letter-spacing: 0.5px; margin: 1px 0; }
+            .header h2 { margin: 0; font-size: ${titleFont}; text-transform: uppercase; font-weight: bold; }
             .header p { margin: 1px 0 0 0; font-size: 8.5px; }
             .section { margin-bottom: 5px; }
             .label { font-weight: bold; font-size: 9px; text-transform: uppercase; }
@@ -2360,8 +2917,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="header">
-            <h2>${settings?.brandName || 'Grão & Sabor'}</h2>
-            <div class="printer-badge">[POS-5890C • 58MM]</div>
+            <h2>${brand}</h2>
             <p>${dateStr}</p>
           </div>
           
@@ -2426,43 +2982,115 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           </div>
           ` : ''}
           
-          ${(order.taxAmount && order.taxAmount > 0) ? `
-          <div class="total-section">
-            <div>SUBTOTAL: ${currencySymbol} ${(order.subtotal || (order.total - order.taxAmount)).toFixed(2).replace('.', ',')}</div>
-            <div style="margin-top: 1px;">TAX (${order.taxRate || 8.25}%): + ${currencySymbol} ${order.taxAmount.toFixed(2).replace('.', ',')}</div>
-          </div>
-          ` : ''}
-          
           <div class="total">
             TOTAL: ${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}
           </div>
 
           <div class="footer-receipt">
             Obrigado pela preferência!<br/>
-            POS-5890C • 58MM
+            ${brand}
           </div>
         </body>
       </html>
     `);
   };
 
-  const printPOS5890CTest = () => {
+  const printTestPage = (formatOverride?: 'a4' | '58mm' | '80mm') => {
+    const format = formatOverride || settings?.printerFormat || 'a4';
+    const brand = settings?.brandName || 'GRÃO & SABOR';
+
+    if (format === 'a4') {
+      printWithIframe(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <title>Teste de Impressão A4 - ${brand}</title>
+            <style>
+              @page { size: A4 portrait; margin: 15mm 20mm; }
+              @media print {
+                html, body { width: 100% !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              }
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                color: #111827;
+                max-width: 680px;
+                margin: 0 auto;
+                padding: 20px;
+                line-height: 1.5;
+              }
+              .box {
+                border: 2px solid #111827;
+                border-radius: 10px;
+                padding: 24px;
+                text-align: center;
+              }
+              h1 { font-size: 24px; text-transform: uppercase; margin: 0 0 4px 0; }
+              .badge { display: inline-block; background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0; padding: 4px 12px; border-radius: 9999px; font-weight: bold; font-size: 12px; margin-top: 8px; }
+              table { width: 100%; border-collapse: collapse; margin: 20px 0; text-align: left; }
+              th, td { padding: 8px 10px; border-bottom: 1px solid #e5e7eb; font-size: 13px; }
+              th { background: #f9fafb; font-weight: bold; }
+            </style>
+          </head>
+          <body>
+            <div class="box">
+              <h1>${brand}</h1>
+              <div style="font-size: 14px; color: #4b5563;">Teste de Impressão no Formato A4 / Sulfite</div>
+              <div class="badge">✓ IMPRESSORA E FORMATO CALIBRADOS NO ESQUADRO DO PAPEL</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Item de Teste</th>
+                    <th style="text-align: center;">Qtd</th>
+                    <th style="text-align: right;">Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Exemplo de Produto / Cardápio</td>
+                    <td style="text-align: center;">1x</td>
+                    <td style="text-align: right;">${currencySymbol} 45,00</td>
+                  </tr>
+                  <tr>
+                    <td>Exemplo de Acompanhamento</td>
+                    <td style="text-align: center;">1x</td>
+                    <td style="text-align: right;">${currencySymbol} 12,00</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div style="text-align: right; font-size: 16px; font-weight: 800; border-top: 2px solid #111; padding-top: 8px;">
+                TOTAL: ${currencySymbol} 57,00
+              </div>
+              <div style="margin-top: 24px; font-size: 12px; color: #6b7280;">
+                Data do teste: ${new Date().toLocaleString('pt-BR')} • Sistema Operando Perfeitamente
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+      return;
+    }
+
+    const is80 = format === '80mm';
+    const paperWidth = is80 ? '80mm' : '58mm';
+    const printWidth = is80 ? '72mm' : '48mm';
+
     printWithIframe(`
       <html>
         <head>
-          <title>Teste POS-5890C</title>
+          <title>Teste de Impressão Térmica</title>
           <style>
-            @page { size: 58mm auto; margin: 0; }
+            @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: 58mm !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
             }
             body { 
               font-family: 'Courier New', Courier, monospace; 
-              width: 48mm; 
-              max-width: 48mm; 
+              width: ${printWidth}; 
+              max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: 10px; 
+              font-size: ${is80 ? '11px' : '10px'}; 
               color: #000;
               line-height: 1.25;
             }
@@ -2474,15 +3102,13 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="center">
-            <h2 style="margin: 0; font-size: 12px;">${settings?.brandName || 'GRÃO & SABOR'}</h2>
-            <div style="font-size: 8px; font-weight: bold; margin: 2px 0;">TESTE DE IMPRESSÃO TÉRMICA</div>
+            <h2 style="margin: 0; font-size: ${is80 ? '14px' : '12px'};">${brand}</h2>
+            <div style="font-size: 8px; font-weight: bold; margin: 2px 0;">TESTE DE IMPRESSÃO TÉRMICA (${paperWidth.toUpperCase()})</div>
           </div>
           <div class="double"></div>
-          <div><strong>IMPRESSORA:</strong> POS-5890C</div>
-          <div><strong>FABRICANTE:</strong> LUOGAO</div>
-          <div><strong>INTERFACE:</strong> USB</div>
-          <div><strong>BOBINA:</strong> 58mm (Útil: 48mm)</div>
-          <div><strong>STATUS:</strong> CONECTADA E ATIVA</div>
+          <div><strong>FORMATO:</strong> Bobina ${paperWidth}</div>
+          <div><strong>LARGURA ÚTIL:</strong> ${printWidth}</div>
+          <div><strong>STATUS:</strong> CONFIGURADA E ATIVA</div>
           <div><strong>DATA:</strong> ${new Date().toLocaleString('pt-BR')}</div>
           <div class="divider"></div>
           <div class="center" style="font-weight: bold; font-size: 9px;">EXEMPLO DE COMANDA</div>
@@ -2494,7 +3120,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div class="double"></div>
           <div class="center" style="font-size: 8px;">
             IMPRESSORA CONFIGURADA COM SUCESSO!<br/>
-            POS-5890C • 58MM USB
+            ${brand}
           </div>
         </body>
       </html>
@@ -5217,63 +5843,151 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 </div>
               </div>
 
-              {/* CONFIGURAÇÃO DE IMPRESSORA TÉRMICA (LUOGAO POS-5890C - 58MM) */}
-              <div className="p-6 rounded-2xl bg-white border border-gray-200/90 shadow-sm space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+              {/* CONFIGURAÇÃO DE IMPRESSORA & FORMATO DE PAPEL */}
+              <div className="p-6 rounded-2xl bg-white border border-gray-200/90 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-gray-100">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center text-amber-900 shadow-xs">
+                    <div className="w-11 h-11 rounded-2xl bg-amber-100 flex items-center justify-center text-amber-900 shadow-xs">
                       <Printer size={22} />
                     </div>
                     <div>
                       <h3 className="text-base font-serif font-bold text-gray-900 flex items-center gap-2">
-                        Impressora Térmica Cadastrada
+                        Configuração de Impressão e Comandas
                         <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                          Ativa & Padrão
+                          {settings?.printerFormat === '58mm' ? 'Bobina 58mm' : settings?.printerFormat === '80mm' ? 'Bobina 80mm' : 'Folha A4 (Padrão)'}
                         </span>
                       </h3>
                       <p className="text-xs text-gray-500">
-                        Modelo padrão configurado para todas as impressões de comandas e listas do sistema
+                        Escolha o tipo de papel e impressora para comandas de pedidos e relatórios de produção
                       </p>
                     </div>
                   </div>
 
                   <button
                     type="button"
-                    onClick={printPOS5890CTest}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-gray-900 text-white hover:bg-black transition-all flex items-center gap-2 shadow-xs cursor-pointer active:scale-95"
+                    onClick={() => printTestPage()}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-900 text-white hover:bg-amber-950 transition-all flex items-center gap-2 shadow-xs cursor-pointer active:scale-95"
                   >
-                    <Printer size={14} /> Imprimir Teste na POS-5890C
+                    <Printer size={15} /> Imprimir Página de Teste
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200/70">
-                    <span className="text-[10px] font-bold uppercase text-gray-500 block">Modelo</span>
-                    <strong className="text-sm font-black text-gray-900 block mt-0.5">POS-5890C</strong>
-                    <span className="text-[10px] text-gray-500">Fabricante: LUOGAO</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200/70">
-                    <span className="text-[10px] font-bold uppercase text-gray-500 block">Bobina / Papel</span>
-                    <strong className="text-sm font-black text-gray-900 block mt-0.5">58 mm</strong>
-                    <span className="text-[10px] text-gray-500">Área útil: 48 mm (384 dots)</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200/70">
-                    <span className="text-[10px] font-bold uppercase text-gray-500 block">Interface</span>
-                    <strong className="text-sm font-black text-gray-900 block mt-0.5">USB</strong>
-                    <span className="text-[10px] text-gray-500">Conexão direta cabo</span>
-                  </div>
-                  <div className="p-3 rounded-xl bg-gray-50 border border-gray-200/70">
-                    <span className="text-[10px] font-bold uppercase text-gray-500 block">Especificações</span>
-                    <strong className="text-xs font-bold text-gray-900 block mt-0.5">DC 12V / 3A</strong>
-                    <span className="text-[10px] text-gray-500">Gaveta: DC 12V / 1A</span>
+                {/* Seletores de formato */}
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-800 uppercase tracking-wide block">
+                    Selecione o Formato do Papel / Impressora:
+                  </label>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Opção A4 */}
+                    <div
+                      onClick={() => setSettings({ ...settings, printerFormat: 'a4' })}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        (!settings?.printerFormat || settings.printerFormat === 'a4')
+                          ? 'border-amber-900 bg-amber-50/50 shadow-sm'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-sm text-gray-900">Folha A4 / Sulfite</span>
+                            <span className="text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-200 text-amber-900">Recomendado</span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Impressoras convencionais jato de tinta, laser ou salvar em PDF.
+                          </p>
+                        </div>
+                        <input
+                          type="radio"
+                          name="printerFormat"
+                          checked={!settings?.printerFormat || settings.printerFormat === 'a4'}
+                          onChange={() => setSettings({ ...settings, printerFormat: 'a4' })}
+                          className="mt-1 text-amber-900 focus:ring-amber-500 h-4 w-4"
+                        />
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+                        <span>Largura: 210 mm</span>
+                        <span className="font-bold text-amber-900">Enquadramento Total</span>
+                      </div>
+                    </div>
+
+                    {/* Opção 80mm */}
+                    <div
+                      onClick={() => setSettings({ ...settings, printerFormat: '80mm' })}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        settings?.printerFormat === '80mm'
+                          ? 'border-amber-900 bg-amber-50/50 shadow-sm'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="font-bold text-sm text-gray-900">Bobina 80 mm</span>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Impressoras térmicas não-fiscais padrão (Epson TM-T20, Bematech, Elgin i9).
+                          </p>
+                        </div>
+                        <input
+                          type="radio"
+                          name="printerFormat"
+                          checked={settings?.printerFormat === '80mm'}
+                          onChange={() => setSettings({ ...settings, printerFormat: '80mm' })}
+                          className="mt-1 text-amber-900 focus:ring-amber-500 h-4 w-4"
+                        />
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+                        <span>Largura: 80 mm</span>
+                        <span className="font-bold text-amber-900">Cupom Térmico Largo</span>
+                      </div>
+                    </div>
+
+                    {/* Opção 58mm */}
+                    <div
+                      onClick={() => setSettings({ ...settings, printerFormat: '58mm' })}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        settings?.printerFormat === '58mm'
+                          ? 'border-amber-900 bg-amber-50/50 shadow-sm'
+                          : 'border-gray-200 bg-white hover:border-gray-300'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <span className="font-bold text-sm text-gray-900">Bobina 58 mm</span>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Mini impressoras térmicas compactas USB/Bluetooth (ex: POS-5890C, Luogao).
+                          </p>
+                        </div>
+                        <input
+                          type="radio"
+                          name="printerFormat"
+                          checked={settings?.printerFormat === '58mm'}
+                          onChange={() => setSettings({ ...settings, printerFormat: '58mm' })}
+                          className="mt-1 text-amber-900 focus:ring-amber-500 h-4 w-4"
+                        />
+                      </div>
+                      <div className="mt-3 pt-2 border-t border-gray-100 flex items-center justify-between text-[11px] text-gray-600">
+                        <span>Largura: 58 mm</span>
+                        <span className="font-bold text-amber-900">Mini Cupom 48mm útil</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70 flex items-start gap-2.5 text-xs text-amber-950">
-                  <CheckCircle2 size={16} className="text-amber-800 shrink-0 mt-0.5" />
-                  <div>
-                    <strong>Integração POS-5890C 58mm ativada:</strong> Todos os botões de impressão do painel administrativo (comanda de pedido na lista, no calendário semanal, resumo de produção e lista de pedidos) já estão calibrados para a largura exata de 58mm da bobina térmica, evitando cortes nas laterais.
+                {/* Dica sobre a tela de impressão do navegador */}
+                <div className="p-4 rounded-xl bg-amber-50/80 border border-amber-200/90 space-y-2 text-xs text-amber-950">
+                  <div className="flex items-center gap-2 font-bold text-amber-900">
+                    <CheckCircle2 size={16} />
+                    <span>Importante: Por que apareceu o botão "Salvar" ao invés de "Imprimir"?</span>
                   </div>
+                  <p className="leading-relaxed text-amber-900/90">
+                    Na janela de impressão que abre no computador, o campo <strong>Destino</strong> estava selecionado como <em>"Salvar como PDF"</em> (por isso o botão vira "Salvar"). Para imprimir diretamente no papel da sua impressora física:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 pl-1 font-medium text-amber-950">
+                    <li>Clique no campo <strong>Destino</strong> (no topo direito da janela de impressão).</li>
+                    <li>Selecione o <strong>nome da sua impressora</strong> (ou clique em <em>"Ver mais..."</em> se ela não aparecer de primeira).</li>
+                    <li>Assim que você selecionar a impressora física conectada, o botão mudará imediatamente para <strong>"Imprimir"</strong>!</li>
+                  </ol>
                 </div>
               </div>
 
