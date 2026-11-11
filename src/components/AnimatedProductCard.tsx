@@ -67,14 +67,10 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
     .reduce((sum, item) => sum + item.quantity, 0);
 
   const isCombo = product.isCombo === true || product.itemFormat === 'combo';
+  const hasMultiplePrices = !!(product.sizes && product.sizes.length > 1);
   const hasSizes = !!(product.sizes && product.sizes.length > 0);
   const isOutOfStock = product.trackStock === true && (product.stockQuantity ?? 0) <= 0;
-  const requiresCustomization = !!(
-    hasSizes ||
-    product.isCustomCake ||
-    product.isMeal ||
-    product.isCustomSandwich
-  );
+  const requiresCustomization = isCombo || hasMultiplePrices || !!product.isCustomCake;
 
   const hasNutritional = !!(
     product.nutritionalInfo &&
@@ -89,18 +85,7 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
       initial={{ opacity: 0, y: 22 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: '-30px' }}
-      whileTap={{ scale: 0.98 }}
-      onClick={(e) => {
-        if ((e.target as HTMLElement).closest('.cart-button-area') || (e.target as HTMLElement).closest('.details-link-area')) {
-          return;
-        }
-        if (isCombo) {
-          onOpenCombo ? onOpenCombo(product) : onSelectProduct(product);
-        } else {
-          onSelectProduct(product);
-        }
-      }}
-      className="bg-[#FAF7F2]/95 backdrop-blur-md rounded-[28px] p-3.5 sm:p-4 border border-[#EADBCC]/90 shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_45px_rgba(0,0,0,0.12)] transition-shadow duration-300 flex flex-col justify-between cursor-pointer w-full group relative overflow-visible"
+      className="bg-[#FAF7F2]/95 backdrop-blur-md rounded-[28px] p-3.5 sm:p-4 border border-[#EADBCC]/90 shadow-[0_4px_24px_rgba(0,0,0,0.04)] hover:shadow-[0_20px_45px_rgba(0,0,0,0.12)] transition-shadow duration-300 flex flex-col justify-between w-full group relative overflow-visible"
       style={{ perspective: 1200 }}
     >
       {/* Container de Apresentação (Pedestal / Moldura com efeito 3D Pop-Out Expandido) */}
@@ -312,7 +297,13 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
               <span>Montar Combo</span>
             </motion.button>
           ) : !requiresCustomization && totalQty > 0 ? (
-            <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-full p-1 shadow-sm">
+            <div 
+              className="h-9 px-2 rounded-full text-xs font-bold flex items-center justify-between gap-1 shadow-md transition-all text-white select-none"
+              style={{
+                backgroundColor: settings.primaryColor || '#5C3D2E',
+                color: getContrastText(settings.primaryColor || '#5C3D2E'),
+              }}
+            >
               <button
                 type="button"
                 onClick={(e) => {
@@ -320,12 +311,12 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
                   const item = cart.find((i) => i.productId === product.id);
                   if (item) onRemoveFromCart(item.id);
                 }}
-                className="w-7 h-7 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-800 transition-colors active:scale-90 cursor-pointer"
+                className="w-6 h-6 rounded-full bg-white/25 hover:bg-white/40 flex items-center justify-center text-white transition-all active:scale-90 cursor-pointer"
                 aria-label="Diminuir quantidade"
               >
-                <Minus size={12} />
+                <Minus size={13} />
               </button>
-              <span className="text-xs font-black min-w-[16px] text-center text-gray-900">
+              <span className="text-xs font-black min-w-[20px] text-center px-1 text-white">
                 {totalQty}
               </span>
               <button
@@ -334,11 +325,10 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
                   e.stopPropagation();
                   onAddToCart(product, 1);
                 }}
-                className="w-7 h-7 rounded-full text-white flex items-center justify-center transition-colors shadow-sm active:scale-90 cursor-pointer"
-                style={{ backgroundColor: settings.primaryColor || '#5C3D2E' }}
+                className="w-6 h-6 rounded-full bg-white/25 hover:bg-white/40 flex items-center justify-center text-white transition-all active:scale-90 cursor-pointer"
                 aria-label="Aumentar quantidade"
               >
-                <Plus size={12} />
+                <Plus size={13} />
               </button>
             </div>
           ) : (
@@ -347,22 +337,20 @@ export const AnimatedProductCard: React.FC<AnimatedProductCardProps> = ({
               whileTap={{ scale: 0.94 }}
               onClick={(e) => {
                 e.stopPropagation();
-                onSelectProduct(product);
+                if (!requiresCustomization) {
+                  onAddToCart(product, 1);
+                } else {
+                  onSelectProduct(product);
+                }
               }}
-              className="px-4 py-2 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-md hover:brightness-110 active:scale-95 transition-all text-white cursor-pointer"
+              className="h-9 px-4 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-md hover:brightness-110 active:scale-95 transition-all text-white cursor-pointer"
               style={{
                 backgroundColor: settings.primaryColor || '#5C3D2E',
                 color: getContrastText(settings.primaryColor || '#5C3D2E'),
               }}
             >
-              <span>
-                {requiresCustomization
-                  ? 'Quero esse'
-                  : totalQty > 0
-                  ? `${totalQty} no pedido`
-                  : 'Adicionar'}
-              </span>
-              <ArrowRight size={13} />
+              <span>Quero esse</span>
+              <Plus size={14} />
             </motion.button>
           )}
         </div>

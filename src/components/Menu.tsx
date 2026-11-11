@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
 import { collection, onSnapshot, addDoc, updateDoc, serverTimestamp, doc, query, orderBy } from 'firebase/firestore';
 import { Product, Order, Settings, Category, CartItem, Side, ProductSize, ImageGallery } from '../types';
-import { Plus, Minus, ShoppingBag, X, MessageCircle, MessageSquare, Check, Calendar, Building2, User, Phone, MapPin, RefreshCw, ChevronDown, Truck, Navigation, Loader2, Lock, ArrowLeft, Info, ArrowRight, Layers, Search } from 'lucide-react';
+import { Plus, Minus, ShoppingBag, X, MessageCircle, MessageSquare, Check, Calendar, Building2, User, Phone, MapPin, RefreshCw, ChevronDown, Truck, Navigation, Loader2, Lock, ArrowLeft, Info, ArrowRight, Layers, Search, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { toast } from 'sonner';
@@ -299,10 +299,38 @@ export default function Menu({
   const cakeToppingsList = (settings.cakeToppings && settings.cakeToppings.length > 0) ? settings.cakeToppings : DEFAULT_CAKE_TOPPINGS;
   const cakeToppersList = (settings.cakeToppers && settings.cakeToppers.length > 0) ? settings.cakeToppers : DEFAULT_CAKE_TOPPERS;
 
-  const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const cached = localStorage.getItem('grao_sabor_cached_products');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [categories, setCategories] = useState<Category[]>(() => {
+    try {
+      const cached = localStorage.getItem('grao_sabor_cached_categories');
+      return cached ? JSON.parse(cached) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [loading, setLoading] = useState(() => {
+    try {
+      const cached = localStorage.getItem('grao_sabor_cached_products');
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('grao_sabor_cart_v1');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [sides, setSides] = useState<Side[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isCustomModalOpen, setIsCustomModalOpen] = useState(false);
@@ -487,20 +515,65 @@ export default function Menu({
     }
   }, [isCustomModalOpen, selectedProductForDetails, selectedProductForCustom]);
 
-  const [formData, setFormData] = useState({
-    nome: '',
-    telefone: '',
-    endereco: '',
-    street: '',
-    number: '',
-    bairro: '',
-    zipCode: '',
-    city: '',
-    state: '',
-    aniversario: '',
-    observacao: '',
-    email: ''
+  // Persistência contínua do Carrinho (não perde itens ao receber chamada, fechar ou atualizar)
+  useEffect(() => {
+    try {
+      localStorage.setItem('grao_sabor_cart_v1', JSON.stringify(cart));
+    } catch (err) {
+      console.warn('Erro ao salvar carrinho no localStorage:', err);
+    }
+  }, [cart]);
+
+  // Preenchimento automático do Cliente (recupera dados salvos do checkout anterior)
+  const [formData, setFormData] = useState(() => {
+    try {
+      const saved = localStorage.getItem('grao_sabor_customer_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          nome: parsed.nome || '',
+          telefone: parsed.telefone || '',
+          endereco: parsed.endereco || '',
+          street: parsed.street || '',
+          number: parsed.number || '',
+          bairro: parsed.bairro || '',
+          zipCode: parsed.zipCode || '',
+          city: parsed.city || '',
+          state: parsed.state || '',
+          aniversario: parsed.aniversario || '',
+          observacao: parsed.observacao || '',
+          email: parsed.email || ''
+        };
+      }
+    } catch {
+      // fallback
+    }
+    return {
+      nome: '',
+      telefone: '',
+      endereco: '',
+      street: '',
+      number: '',
+      bairro: '',
+      zipCode: '',
+      city: '',
+      state: '',
+      aniversario: '',
+      observacao: '',
+      email: ''
+    };
   });
+
+  // Salvar perfil do cliente sempre que ele preencher ou alterar os dados
+  useEffect(() => {
+    try {
+      if (formData.nome || formData.telefone || formData.street) {
+        localStorage.setItem('grao_sabor_customer_profile', JSON.stringify(formData));
+      }
+    } catch (err) {
+      console.warn('Erro ao salvar perfil do cliente:', err);
+    }
+  }, [formData]);
 
   const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
   const [deliveryCalculation, setDeliveryCalculation] = useState<DeliveryCalculation | null>(null);
@@ -683,14 +756,16 @@ export default function Menu({
   }, [selectedProductForDetails]);
 
   useEffect(() => {
-    console.log('Menu: Inicilizando listeners...');
-    setLoading(true);
-    
+    // Inicia ouvintes do Firestore com cache local
     const unsubProducts = onSnapshot(query(collection(db, 'produtos'), orderBy('title')), (snapshot) => {
       const fetchedProducts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      console.log('Menu: Produtos carregados:', fetchedProducts.length);
       setProducts(fetchedProducts);
       setLoading(false);
+      try {
+        localStorage.setItem('grao_sabor_cached_products', JSON.stringify(fetchedProducts));
+      } catch (e) {
+        // ignore quota
+      }
     }, (error) => {
       console.error('Menu: Erro ao carregar produtos:', error);
       setLoading(false);
@@ -698,8 +773,12 @@ export default function Menu({
 
     const unsubCategories = onSnapshot(query(collection(db, 'categorias'), orderBy('order', 'asc')), (snapshot) => {
       const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category));
-      console.log('Menu: Categorias carregadas:', fetchedCategories.length);
       setCategories(fetchedCategories);
+      try {
+        localStorage.setItem('grao_sabor_cached_categories', JSON.stringify(fetchedCategories));
+      } catch (e) {
+        // ignore quota
+      }
     }, (error) => {
       console.error('Menu: Erro ao carregar categorias:', error);
     });
@@ -717,64 +796,12 @@ export default function Menu({
       console.error('Menu: Erro ao carregar galerias:', error);
     });
 
-    const unsubB2bProfiles = onSnapshot(collection(db, 'pedidos'), (snapshot) => {
-      const b2bOrders = snapshot.docs
-        .map(doc => doc.data())
-        .filter((o: any) => o.isB2B || o.isPJ);
-      const profilesMap: Record<string, any> = {};
-      b2bOrders.forEach((o: any) => {
-        const name = o.b2bCompanyName || o.customerName;
-        if (name && !profilesMap[name.toLowerCase()]) {
-          profilesMap[name.toLowerCase()] = {
-            name: name,
-            manager: o.b2bManagerName || '',
-            phone: o.phone || '',
-            address: o.b2bAddress || o.address || ''
-          };
-        }
-      });
-      setB2bProfiles(Object.values(profilesMap));
-    }, (error) => {
-      console.error('Menu: Erro ao carregar pedidos para perfis B2B:', error);
-    });
-
     return () => {
       unsubProducts();
       unsubCategories();
       unsubSides();
       unsubGalleries();
-      unsubB2bProfiles();
     };
-  }, []);
-
-  // Load B2B Profiles for Autocomplete
-  useEffect(() => {
-    if (!db) return;
-    try {
-      const q = query(collection(db, 'pedidos'));
-      const unsub = onSnapshot(q, (snapshot) => {
-        const uniqueProfilesMap: Record<string, any> = {};
-        snapshot.docs.forEach(docSnap => {
-          const d = docSnap.data();
-          if (d.isB2B || d.isPJ) {
-            const companyName = d.b2bCompanyName || d.customerName || '';
-            const key = companyName.toLowerCase().trim();
-            if (key && !uniqueProfilesMap[key]) {
-              uniqueProfilesMap[key] = {
-                name: companyName,
-                manager: d.b2bManagerName || '',
-                phone: d.phone || '',
-                address: d.b2bAddress || d.address || ''
-              };
-            }
-          }
-        });
-        setB2bProfiles(Object.values(uniqueProfilesMap));
-      });
-      return () => unsub();
-    } catch (e) {
-      console.error("Error loading B2B profiles catalog:", e);
-    }
   }, []);
 
   // Check localStorage for saved B2B profile
@@ -799,6 +826,24 @@ export default function Menu({
       toast.info(settings.language === 'en'
         ? `The minimum order quantity for "${product.title}" is ${minQ} units.`
         : `A quantidade mínima para "${product.title}" é de ${minQ} unidades.`);
+    }
+
+    const hasMultipleSizes = !!(product.sizes && product.sizes.length > 1);
+    const isCombo = product.isCombo === true || product.itemFormat === 'combo';
+    const isCustomCake = !!product.isCustomCake;
+
+    // Se o item tiver apenas 1 valor cadastrado (não tem múltiplos tamanhos, não é combo nem bolo personalizado)
+    // adiciona direto na sacola sem abrir modal!
+    if (!hasMultipleSizes && !isCombo && !isCustomCake) {
+      const defaultSize = (product.sizes && product.sizes.length === 1) ? product.sizes[0] : undefined;
+      setCart(prev => {
+        const existing = prev.find(item => item.productId === product.id && (!item.selectedSize || item.selectedSize?.id === defaultSize?.id) && !item.mealOptions);
+        if (existing) {
+          return prev.map(item => item === existing ? { ...item, quantity: item.quantity + effectiveQty } : item);
+        }
+        return [...prev, { id: Math.random().toString(36).substr(2, 9), productId: product.id, quantity: effectiveQty, selectedSize: defaultSize }];
+      });
+      return;
     }
 
     const hasSizesOpt = !!(product.sizes && product.sizes.length > 0);
@@ -3028,6 +3073,42 @@ export default function Menu({
                     )}
 
                     <form onSubmit={handleFinalizar} className="space-y-4">
+                      {Boolean(formData.nome || formData.telefone) && (
+                        <div className="flex items-center justify-between p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-950 text-xs shadow-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-amber-800 font-bold text-sm">✨</span>
+                            <span className="font-medium">
+                              Seus dados foram preenchidos automaticamente para sua comodidade!
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFormData({
+                                nome: '',
+                                telefone: '',
+                                endereco: '',
+                                street: '',
+                                number: '',
+                                bairro: '',
+                                zipCode: '',
+                                city: '',
+                                state: '',
+                                aniversario: '',
+                                observacao: '',
+                                email: ''
+                              });
+                              localStorage.removeItem('grao_sabor_customer_profile');
+                              toast.info('Dados limpos para um novo preenchimento.');
+                            }}
+                            className="text-[11px] font-bold text-amber-900 underline hover:text-black cursor-pointer ml-2 shrink-0"
+                            title="Limpar campos para preencher outro nome/endereço"
+                          >
+                            Limpar
+                          </button>
+                        </div>
+                      )}
+
                       <div className="space-y-1">
                         <label className="text-xs font-bold uppercase text-black">{t.fullName}</label>
                         <input 
@@ -4154,8 +4235,28 @@ export default function Menu({
                   const isDisabled = !!isCakeIncomplete || !!isSandwichIncomplete;
                   const minQ = selectedProductForDetails?.minQuantity && selectedProductForDetails.minQuantity > 1 ? selectedProductForDetails.minQuantity : 1;
 
+                  const cartItemsForThis = cart.filter(it => it.productId === selectedProductForDetails.id);
+                  const totalInCartForThis = cartItemsForThis.reduce((acc, it) => acc + it.quantity, 0);
+
                   return (
                     <>
+                      {/* Botão Excluir Item (se já estiver no carrinho) */}
+                      {totalInCartForThis > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            cartItemsForThis.forEach(it => removeFromCart(it.id));
+                            toast.info('Item removido do seu pedido.');
+                            setSelectedProductForDetails(null);
+                          }}
+                          className="h-11 px-3.5 rounded-2xl border border-red-200 bg-red-50 hover:bg-red-100 text-red-700 flex items-center justify-center gap-1.5 transition-all text-xs font-bold cursor-pointer shrink-0"
+                          title="Excluir este item do seu pedido"
+                        >
+                          <Trash2 size={15} />
+                          <span className="hidden sm:inline">Excluir</span>
+                        </button>
+                      )}
+
                       {/* Stepper [- 1 +] */}
                       <div className="flex items-center gap-2 bg-white border border-gray-200/90 rounded-full px-2 py-1.5 shadow-xs shrink-0">
                         <button

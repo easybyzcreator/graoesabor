@@ -62,61 +62,75 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [activeScreen, setActiveScreen] = useState<'intro' | 'selector' | 'menu'>('intro');
   const [activeCatalog, setActiveCatalog] = useState<string | null>('catalog1');
-  const [settings, setSettings] = useState<Settings>({
-    logo: 'https://raw.githubusercontent.com/easybyzcreator/imagens/fec01da426f25ac9e87c5339fd4d4820c7e334f4/logo%20grao%20e%20sabor.jpg',
-    primaryColor: '#865d39',
-    whatsappNumber: '',
-    whatsappCountryCode: '+55',
-    slug: 'grao-e-sabor',
-    brandName: 'Grão & Sabor',
-    slogan: 'Cardápio exclusivo e produtos especiais.',
-    whatsappClosingMessage: 'Obrigada pelo interesse em nossos produtos, aguarde que entraremos em contato para confirmação!',
-    backgroundImage: 'https://i.ibb.co/X0vYy7L/cakes.png',
-    glassColor: 'rgba(250, 247, 242, 0.92)',
-    textColor: '#000000',
-    language: 'pt',
-    currency: 'BRL',
-    introEnabled: true,
-    introTitle: 'Grão & Sabor',
-    introSubtitle: 'Cardápio Especial',
-    introDescription: 'Acesse nossos produtos artesanais, novidades e faça seu pedido com praticidade.',
-    introButtonText: 'ACESSAR NOSSO CARDÁPIO',
-    introBottomText: 'Grão & Sabor',
-    selectorEnabled: true,
-    selectorTitle: 'Grão & Sabor',
-    selectorSubtitle: 'Escolha seu cardápio',
-    catalog1Title: 'Cardápio Principal',
-    catalog1Image: 'https://raw.githubusercontent.com/easybyzcreator/imagens/fec01da426f25ac9e87c5339fd4d4820c7e334f4/logo%20grao%20e%20sabor.jpg',
-    catalog1Desc: 'Nossos produtos e opções exclusivas.',
-    catalog1Slogan: 'Qualidade e sabor incomparáveis\nComida caseira com tempero de verdade\nFaça seu pedido com praticidade',
-    catalog1Active: true,
-    catalog2Title: 'Doces & Sobremesas',
-    catalog2Image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80',
-    catalog2Desc: 'Bolos, tortas e sobremesas deliciosas.',
-    catalog2Slogan: 'Ingredientes selecionados\nDoces artesanais frescos todos os dias',
-    catalog2Active: true,
-    catalog3Title: 'Cafés & Bebidas',
-    catalog3Image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop&q=80',
-    catalog3Desc: 'Cafés especiais, sucos naturais e bebidas refrescantes.',
-    catalog3Slogan: 'Grãos nobres moídos na hora\nSucos naturais da fruta sem conservantes',
-    catalog3Active: true,
-    catalog4Title: 'Lanches & Salgados',
-    catalog4Image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=600&auto=format&fit=crop&q=80',
-    catalog4Desc: 'Salgados assados, empadas e sanduíches artesanais.',
-    catalog4Slogan: 'Massas artesanais crocantes\nRecheios fartos e tempero especial',
-    catalog4Active: true,
-    catalog5Title: 'Linha Fit & Saudável',
-    catalog5Image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&auto=format&fit=crop&q=80',
-    catalog5Desc: 'Pratos leves, low carb e opções funcionais.',
-    catalog5Slogan: '100% saudável e equilibrado\nMais foco na sua saúde e energia',
-    catalog5Active: true,
-    catalog6Title: 'Encomendas & Eventos',
-    catalog6Image: 'https://images.unsplash.com/photo-1555244162-803834f70033?w=600&auto=format&fit=crop&q=80',
-    catalog6Desc: 'Kits especiais para confraternizações, festas e reuniões.',
-    catalog6Slogan: 'Kits corporativos e festas\nConsulte prazos e encomendas especiais',
-    catalog6Active: true
+  const [settings, setSettings] = useState<Settings>(() => {
+    try {
+      const cached = localStorage.getItem('grao_sabor_cached_settings');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch (e) {}
+    return {
+      logo: 'https://raw.githubusercontent.com/easybyzcreator/imagens/fec01da426f25ac9e87c5339fd4d4820c7e334f4/logo%20grao%20e%20sabor.jpg',
+      primaryColor: '#865d39',
+      whatsappNumber: '',
+      whatsappCountryCode: '+55',
+      slug: 'grao-e-sabor',
+      brandName: 'Grão & Sabor',
+      slogan: 'Cardápio exclusivo e produtos especiais.',
+      whatsappClosingMessage: 'Obrigada pelo interesse em nossos produtos, aguarde que entraremos em contato para confirmação!',
+      backgroundImage: 'https://i.ibb.co/X0vYy7L/cakes.png',
+      glassColor: 'rgba(250, 247, 242, 0.92)',
+      textColor: '#000000',
+      language: 'pt',
+      currency: 'BRL',
+      introEnabled: true,
+      introTitle: 'Grão & Sabor',
+      introSubtitle: 'Cardápio Especial',
+      introDescription: 'Acesse nossos produtos artesanais, novidades e faça seu pedido com praticidade.',
+      introButtonText: 'ACESSAR NOSSO CARDÁPIO',
+      introBottomText: 'Grão & Sabor',
+      selectorEnabled: true,
+      selectorTitle: 'Grão & Sabor',
+      selectorSubtitle: 'Escolha seu cardápio',
+      catalog1Title: 'Cardápio Principal',
+      catalog1Image: 'https://raw.githubusercontent.com/easybyzcreator/imagens/fec01da426f25ac9e87c5339fd4d4820c7e334f4/logo%20grao%20e%20sabor.jpg',
+      catalog1Desc: 'Nossos produtos e opções exclusivas.',
+      catalog1Slogan: 'Qualidade e sabor incomparáveis\nComida caseira com tempero de verdade\nFaça seu pedido com praticidade',
+      catalog1Active: true,
+      catalog2Title: 'Doces & Sobremesas',
+      catalog2Image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=600&auto=format&fit=crop&q=80',
+      catalog2Desc: 'Bolos, tortas e sobremesas deliciosas.',
+      catalog2Slogan: 'Ingredientes selecionados\nDoces artesanais frescos todos os dias',
+      catalog2Active: true,
+      catalog3Title: 'Cafés & Bebidas',
+      catalog3Image: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=600&auto=format&fit=crop&q=80',
+      catalog3Desc: 'Cafés especiais, sucos naturais e bebidas refrescantes.',
+      catalog3Slogan: 'Grãos nobres moídos na hora\nSucos naturais da fruta sem conservantes',
+      catalog3Active: true,
+      catalog4Title: 'Lanches & Salgados',
+      catalog4Image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?w=600&auto=format&fit=crop&q=80',
+      catalog4Desc: 'Salgados assados, empadas e sanduíches artesanais.',
+      catalog4Slogan: 'Massas artesanais crocantes\nRecheios fartos e tempero especial',
+      catalog4Active: true,
+      catalog5Title: 'Linha Fit & Saudável',
+      catalog5Image: 'https://images.unsplash.com/photo-1540420773420-3366772f4999?w=600&auto=format&fit=crop&q=80',
+      catalog5Desc: 'Pratos leves, low carb e opções funcionais.',
+      catalog5Slogan: '100% saudável e equilibrado\nMais foco na sua saúde e energia',
+      catalog5Active: true,
+      catalog6Title: 'Encomendas & Eventos',
+      catalog6Image: 'https://images.unsplash.com/photo-1555244162-803834f70033?w=600&auto=format&fit=crop&q=80',
+      catalog6Desc: 'Kits especiais para confraternizações, festas e reuniões.',
+      catalog6Slogan: 'Kits corporativos e festas\nConsulte prazos e encomendas especiais',
+      catalog6Active: true
+    };
   });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    try {
+      return !localStorage.getItem('grao_sabor_cached_settings');
+    } catch {
+      return true;
+    }
+  });
 
   useEffect(() => {
     // Check URL for admin path
@@ -154,8 +168,12 @@ export default function App() {
         if (data.selectorEnabled === undefined) {
           data.selectorEnabled = true;
         }
-        setSettings(prev => ({ ...prev, ...data, currency: 'BRL', selectorEnabled: data.selectorEnabled !== false }));
+        const updated = { ...data, currency: 'BRL' as const, selectorEnabled: data.selectorEnabled !== false };
+        setSettings(prev => ({ ...prev, ...updated }));
         setLoading(false);
+        try {
+          localStorage.setItem('grao_sabor_cached_settings', JSON.stringify(updated));
+        } catch (e) {}
 
         // Update Page Title
         if (data.brandName) {

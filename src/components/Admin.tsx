@@ -239,6 +239,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
   const [twoSize1, setTwoSize1] = useState({ name: '300g', price: '', oldPrice: '', stock: '' });
   const [twoSize2, setTwoSize2] = useState({ name: '500g', price: '', oldPrice: '', stock: '' });
   const [multipleSizeForm, setMultipleSizeForm] = useState({ name: '', price: '', stock: '' });
+  const [editingSizeIndex, setEditingSizeIndex] = useState<number | null>(null);
   const [isNutritionalExpanded, setIsNutritionalExpanded] = useState(false);
   const [trackStock, setTrackStock] = useState(false);
   const [stockQuantityInput, setStockQuantityInput] = useState('0');
@@ -6908,11 +6909,37 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                       </button>
                     </div>
 
-                    {/* Adicionar Nova Opção */}
-                    <div className="p-4 rounded-2xl border border-gray-200 bg-white space-y-3">
-                      <span className="text-xs font-black uppercase text-gray-900 block">
-                        + ADICIONAR NOVA OPÇÃO DE TAMANHO OU COMBO
-                      </span>
+                    {/* Adicionar / Editar Opção */}
+                    <div className={`p-4 rounded-2xl border transition-all ${
+                      editingSizeIndex !== null 
+                        ? 'border-amber-400 bg-amber-50/40 shadow-xs' 
+                        : 'border-gray-200 bg-white'
+                    } space-y-3`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase text-gray-900 block flex items-center gap-1.5">
+                          {editingSizeIndex !== null ? (
+                            <>
+                              <Edit2 size={13} className="text-amber-800" />
+                              <span>EDITANDO OPÇÃO #{editingSizeIndex + 1}</span>
+                            </>
+                          ) : (
+                            <span>+ ADICIONAR NOVA OPÇÃO DE TAMANHO OU COMBO</span>
+                          )}
+                        </span>
+                        {editingSizeIndex !== null && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingSizeIndex(null);
+                              setMultipleSizeForm({ name: '', price: '', stock: '' });
+                            }}
+                            className="text-[11px] font-bold text-gray-500 hover:text-gray-800 underline cursor-pointer"
+                          >
+                            Cancelar Edição
+                          </button>
+                        )}
+                      </div>
+
                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                         <div className="sm:col-span-2">
                           <label className="text-[10px] font-bold text-gray-500 uppercase">NOME DA OPÇÃO / COMBO *</label>
@@ -6921,7 +6948,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                             placeholder="Ex: Marmita individual, Porção 500g..."
                             value={multipleSizeForm.name}
                             onChange={e => setMultipleSizeForm({ ...multipleSizeForm, name: e.target.value })}
-                            className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-semibold"
+                            className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-semibold bg-white text-black"
                           />
                         </div>
                         <div>
@@ -6935,7 +6962,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                               const formatted = digits ? (parseInt(digits) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
                               setMultipleSizeForm({ ...multipleSizeForm, price: formatted });
                             }}
-                            className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-bold"
+                            className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-bold bg-white text-black"
                           />
                         </div>
                         <div className="flex items-end gap-2">
@@ -6946,66 +6973,176 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                               placeholder="Qtd."
                               value={multipleSizeForm.stock}
                               onChange={e => setMultipleSizeForm({ ...multipleSizeForm, stock: e.target.value })}
-                              className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-semibold"
+                              className="w-full p-2.5 rounded-xl border border-gray-300 text-xs font-semibold bg-white text-black"
                             />
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (!multipleSizeForm.name.trim()) {
-                                toast.error('Informe o nome da opção.');
-                                return;
-                              }
-                              const p = multipleSizeForm.price ? (parseFloat(multipleSizeForm.price.replace(/\D/g, '')) / 100) : 0;
-                              const s = multipleSizeForm.stock ? parseInt(multipleSizeForm.stock) : undefined;
-                              const newSize: ProductSize = {
-                                id: Math.random().toString(36).substr(2, 9),
-                                name: multipleSizeForm.name.trim(),
-                                price: p,
-                                stock: s
-                              };
-                              setNewProduct({
-                                ...newProduct,
-                                hasSizes: true,
-                                sizes: [...(newProduct.sizes || []), newSize]
-                              });
-                              setMultipleSizeForm({ name: '', price: '', stock: '' });
-                              toast.success('Opção adicionada!');
-                            }}
-                            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
-                          >
-                            + Adicionar
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Lista de tamanhos configurados */}
-                      <div className="space-y-1.5 pt-2">
-                        {(newProduct.sizes || []).map((s, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl border border-gray-200 text-xs">
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-gray-900">{s.name}</span>
-                              <span className="font-black text-amber-900">{currencySymbol} {s.price.toFixed(2).replace('.', ',')}</span>
-                              {s.stock !== undefined && (
-                                <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold">
-                                  Estoque: {s.stock} un
-                                </span>
-                              )}
-                            </div>
+                          {editingSizeIndex !== null ? (
                             <button
                               type="button"
                               onClick={() => {
+                                if (!multipleSizeForm.name.trim()) {
+                                  toast.error('Informe o nome da opção.');
+                                  return;
+                                }
+                                const p = multipleSizeForm.price ? (parseFloat(multipleSizeForm.price.replace(/\D/g, '')) / 100) : 0;
+                                const s = multipleSizeForm.stock ? parseInt(multipleSizeForm.stock) : undefined;
+                                const updatedSizes = [...(newProduct.sizes || [])];
+                                updatedSizes[editingSizeIndex] = {
+                                  ...updatedSizes[editingSizeIndex],
+                                  name: multipleSizeForm.name.trim(),
+                                  price: p,
+                                  stock: s
+                                };
                                 setNewProduct({
                                   ...newProduct,
-                                  sizes: (newProduct.sizes || []).filter((_, i) => i !== idx)
+                                  sizes: updatedSizes
                                 });
+                                setEditingSizeIndex(null);
+                                setMultipleSizeForm({ name: '', price: '', stock: '' });
+                                toast.success('Opção atualizada com sucesso!');
                               }}
-                              className="text-red-600 hover:text-red-800 p-1 rounded cursor-pointer"
+                              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0 flex items-center gap-1 shadow-xs"
                             >
-                              <Trash2 size={14} />
+                              <Save size={13} /> Salvar
                             </button>
-                          </div>
-                        ))}
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!multipleSizeForm.name.trim()) {
+                                  toast.error('Informe o nome da opção.');
+                                  return;
+                                }
+                                const p = multipleSizeForm.price ? (parseFloat(multipleSizeForm.price.replace(/\D/g, '')) / 100) : 0;
+                                const s = multipleSizeForm.stock ? parseInt(multipleSizeForm.stock) : undefined;
+                                const newSize: ProductSize = {
+                                  id: Math.random().toString(36).substr(2, 9),
+                                  name: multipleSizeForm.name.trim(),
+                                  price: p,
+                                  stock: s
+                                };
+                                setNewProduct({
+                                  ...newProduct,
+                                  hasSizes: true,
+                                  sizes: [...(newProduct.sizes || []), newSize]
+                                });
+                                setMultipleSizeForm({ name: '', price: '', stock: '' });
+                                toast.success('Opção adicionada!');
+                              }}
+                              className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shrink-0"
+                            >
+                              + Adicionar
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Lista de tamanhos configurados com Ordenação e Edição */}
+                      <div className="space-y-1.5 pt-2">
+                        {(newProduct.sizes || []).map((s, idx) => {
+                          const isBeingEdited = editingSizeIndex === idx;
+                          return (
+                            <div 
+                              key={idx} 
+                              className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-all ${
+                                isBeingEdited 
+                                  ? 'bg-amber-100/70 border-amber-400 ring-2 ring-amber-300' 
+                                  : 'bg-gray-50 border-gray-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className="w-5 h-5 rounded-full bg-gray-200 text-gray-700 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                  {idx + 1}
+                                </span>
+                                <span className="font-bold text-gray-900">{s.name}</span>
+                                <span className="font-black text-amber-900">{currencySymbol} {s.price.toFixed(2).replace('.', ',')}</span>
+                                {s.stock !== undefined && (
+                                  <span className="text-[10px] bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                                    Estoque: {s.stock} un
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="flex items-center gap-1">
+                                {/* Botão Mover para Cima */}
+                                <button
+                                  type="button"
+                                  disabled={idx === 0}
+                                  onClick={() => {
+                                    if (idx === 0) return;
+                                    const sizes = [...(newProduct.sizes || [])];
+                                    const temp = sizes[idx - 1];
+                                    sizes[idx - 1] = sizes[idx];
+                                    sizes[idx] = temp;
+                                    setNewProduct({ ...newProduct, sizes });
+                                    if (editingSizeIndex === idx) setEditingSizeIndex(idx - 1);
+                                    else if (editingSizeIndex === idx - 1) setEditingSizeIndex(idx);
+                                  }}
+                                  className="p-1.5 text-gray-600 hover:text-black hover:bg-white rounded-lg border border-transparent hover:border-gray-300 disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                  title="Subir posição"
+                                >
+                                  <ArrowUp size={13} />
+                                </button>
+
+                                {/* Botão Mover para Baixo */}
+                                <button
+                                  type="button"
+                                  disabled={idx === (newProduct.sizes || []).length - 1}
+                                  onClick={() => {
+                                    if (idx >= (newProduct.sizes || []).length - 1) return;
+                                    const sizes = [...(newProduct.sizes || [])];
+                                    const temp = sizes[idx + 1];
+                                    sizes[idx + 1] = sizes[idx];
+                                    sizes[idx] = temp;
+                                    setNewProduct({ ...newProduct, sizes });
+                                    if (editingSizeIndex === idx) setEditingSizeIndex(idx + 1);
+                                    else if (editingSizeIndex === idx + 1) setEditingSizeIndex(idx);
+                                  }}
+                                  className="p-1.5 text-gray-600 hover:text-black hover:bg-white rounded-lg border border-transparent hover:border-gray-300 disabled:opacity-20 disabled:hover:bg-transparent cursor-pointer disabled:cursor-not-allowed"
+                                  title="Descer posição"
+                                >
+                                  <ArrowDown size={13} />
+                                </button>
+
+                                {/* Botão Editar */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingSizeIndex(idx);
+                                    setMultipleSizeForm({
+                                      name: s.name,
+                                      price: s.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+                                      stock: s.stock !== undefined ? String(s.stock) : ''
+                                    });
+                                  }}
+                                  className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-white rounded-lg border border-transparent hover:border-blue-200 cursor-pointer"
+                                  title="Editar esta opção"
+                                >
+                                  <Edit2 size={13} />
+                                </button>
+
+                                {/* Botão Excluir */}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (editingSizeIndex === idx) {
+                                      setEditingSizeIndex(null);
+                                      setMultipleSizeForm({ name: '', price: '', stock: '' });
+                                    }
+                                    setNewProduct({
+                                      ...newProduct,
+                                      sizes: (newProduct.sizes || []).filter((_, i) => i !== idx)
+                                    });
+                                  }}
+                                  className="p-1.5 text-red-600 hover:text-red-800 hover:bg-white rounded-lg border border-transparent hover:border-red-200 cursor-pointer"
+                                  title="Excluir"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                         {(newProduct.sizes || []).length === 0 && (
                           <p className="text-xs text-gray-400 italic text-center py-2">
                             Nenhum tamanho adicionado. Clique no botão de carregar tabela padrão acima ou adicione manualmente.
