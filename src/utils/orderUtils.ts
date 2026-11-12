@@ -131,6 +131,10 @@ export const formatOrderWhatsAppMessage = (order: Order, settings: Settings): st
 
   msg += ` *VALOR TOTAL: ${currency} ${formatCurrencyValue(order.total)}*\n`;
 
+  if (order.paymentMethod) {
+    msg += ` *Forma de Pagamento:* ${order.paymentMethod}\n`;
+  }
+
   const paymentText = order.paymentStatus === 'full'
     ? '✅ Pago Integralmente'
     : order.paymentStatus === 'half'

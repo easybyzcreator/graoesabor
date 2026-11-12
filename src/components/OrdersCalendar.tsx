@@ -1312,9 +1312,16 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
 
                     {/* Status do Pagamento */}
                     <div className="p-3.5 rounded-2xl bg-white border border-gray-200/80 shadow-xs space-y-2">
-                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 block">
-                        STATUS DO PAGAMENTO
-                      </span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 block">
+                          STATUS DO PAGAMENTO
+                        </span>
+                        {selectedOrder.paymentMethod && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-950">
+                            {selectedOrder.paymentMethod}
+                          </span>
+                        )}
+                      </div>
                       <div className="grid grid-cols-3 gap-1.5">
                         <button
                           type="button"

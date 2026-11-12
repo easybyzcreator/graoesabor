@@ -576,6 +576,7 @@ export default function Menu({
   }, [formData]);
 
   const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery');
+  const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [deliveryCalculation, setDeliveryCalculation] = useState<DeliveryCalculation | null>(null);
   const [selectedDeliveryCityId, setSelectedDeliveryCityId] = useState<string>('');
   const [isCalculatingDelivery, setIsCalculatingDelivery] = useState(false);
@@ -1379,6 +1380,10 @@ export default function Menu({
         return;
       }
     }
+    if (!paymentMethod) {
+      toast.error('Por favor, selecione a forma de pagamento!');
+      return;
+    }
 
     const validation = validateCartItems();
     if (!validation.isValid) {
@@ -1459,7 +1464,8 @@ export default function Menu({
         taxRate: 0,
         taxAmount: 0,
         createdAt: serverTimestamp(),
-        orderLanguage: settings.language || 'pt'
+        orderLanguage: settings.language || 'pt',
+        paymentMethod: paymentMethod
       });
 
       console.log('Finalizando pedido...', orderData);
@@ -1513,6 +1519,9 @@ export default function Menu({
       }
       if (settings.deliveryEnabled && deliveryType === 'delivery' && deliveryCalculation?.distanceKm) {
         message += `*Distância Estimada:* ${deliveryCalculation.distanceKm} km (via OpenStreetMap/OSRM)\n`;
+      }
+      if (paymentMethod) {
+        message += `*Forma de Pagamento:* ${paymentMethod}\n`;
       }
       message += `*${t.observation}:* ${formData.observacao || '-'}\n\n`;
 
@@ -1641,6 +1650,7 @@ export default function Menu({
       email: '' 
     });
     setDeliveryCalculation(null);
+    setPaymentMethod('');
   };
 
   const handleCompleteB2bOrder = () => {
@@ -3511,6 +3521,65 @@ export default function Menu({
                           )}
                         </>
                       )}
+
+                      {/* FORMA DE PAGAMENTO */}
+                      <div className="space-y-2 pt-2 border-t border-black/10">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold uppercase text-black flex items-center gap-1">
+                            <span>FORMA DE PAGAMENTO</span>
+                            <span className="text-red-500 font-black">*</span>
+                          </label>
+                          {paymentMethod && (
+                            <span className="text-[11px] font-bold uppercase text-gray-500 tracking-wide">
+                              {paymentMethod}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="p-2.5 sm:p-3 rounded-xl bg-[#FEF9E7] border border-amber-300/80 flex items-start gap-2 shadow-2xs">
+                          <div className="w-4 h-4 rounded-full bg-slate-500 text-white flex items-center justify-center shrink-0 mt-0.5 font-serif text-[10px] font-bold">
+                            i
+                          </div>
+                          <div className="text-[11px] leading-snug">
+                            <p className="font-bold text-amber-900 mb-0.5">
+                              Pagamento não realizado neste aplicativo:
+                            </p>
+                            <p className="text-amber-950/90 font-medium">
+                              Por favor, selecione abaixo apenas para nos informar qual a sua forma de pagamento. O pagamento não será feito no app, será realizado antecipado ou na entrega.
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {(['Pix', 'Dinheiro', 'Cartão de Crédito', 'Cartão de Débito', 'Link de Pagamento'] as const).map((method, idx) => {
+                            const isSelected = paymentMethod === method;
+                            return (
+                              <button
+                                key={method}
+                                type="button"
+                                onClick={() => setPaymentMethod(method)}
+                                className={cn(
+                                  "py-2 px-3 rounded-full text-xs font-bold transition-all cursor-pointer text-center active:scale-[0.98] shadow-xs",
+                                  idx === 4 ? "col-span-2" : "",
+                                  isSelected
+                                    ? "shadow-sm"
+                                    : "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50"
+                                )}
+                                style={
+                                  isSelected
+                                    ? {
+                                        backgroundColor: settings.primaryColor || '#0F172A',
+                                        color: getContrastText(settings.primaryColor || '#0F172A'),
+                                      }
+                                    : undefined
+                                }
+                              >
+                                {method}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
                       <div className="space-y-1">
                         <label className="text-xs font-bold uppercase text-black">{t.observation}</label>

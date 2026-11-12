@@ -11,7 +11,7 @@ import {
   Save, X, Copy, CheckCircle2, Loader2, Layers, Image as ImageIcon,
   ArrowUp, ArrowDown, MessageCircle, MessageSquare, Calendar, Printer, Cake, Eye, EyeOff, ArrowLeft,
   DollarSign, Coins, ChevronDown, ChevronUp, Users, Download, Truck, Search, Info, Table, ShoppingBag, Calculator,
-  MapPin, Navigation, ArrowUpDown, Lock
+  MapPin, Navigation, ArrowUpDown, Lock, CreditCard
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, removeUndefined } from '../lib/utils';
@@ -2781,6 +2781,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 <strong>Modalidade</strong>
                 <span>${order.deliveryType === 'pickup' ? 'Retirada no Estabelecimento' : 'Entrega (Delivery)'}</span>
               </div>
+              ${order.paymentMethod ? `
+              <div class="client-item">
+                <strong>Forma de Pagamento</strong>
+                <span>${order.paymentMethod}</span>
+              </div>
+              ` : ''}
             </div>
 
             <table class="items-table">
@@ -2958,6 +2964,13 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             ${itemsHtml}
           </div>
           
+          ${order.paymentMethod ? `
+          <div class="section">
+            <span class="label">PAGAMENTO:</span>
+            <span class="value">${order.paymentMethod.toUpperCase()}</span>
+          </div>
+          ` : ''}
+
           ${order.observation ? `
           <div class="divider"></div>
           <div class="section">
@@ -7857,6 +7870,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                              Agendado para: {order.pickupDate}
                           </span>
                         )}
+                        {order.paymentMethod && (
+                          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-amber-50 text-amber-950 border border-amber-300 font-bold text-xs shadow-2xs">
+                            <CreditCard size={13} className="text-amber-800" />
+                            <span>Pagamento: {order.paymentMethod}</span>
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 mt-2">
                         <span className="text-xs font-bold text-gray-500 mr-1 uppercase">Sinalizar Pagamento:</span>
@@ -8094,6 +8113,15 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                               {order.observation || 'Nenhuma observação informada.'}
                             </div>
                           </div>
+                          {order.paymentMethod && (
+                            <div className="space-y-1 md:col-span-2">
+                              <div className="font-bold uppercase text-gray-500 text-[10px]">Forma de Pagamento Informada pelo Cliente</div>
+                              <div className="p-3 bg-amber-50/70 rounded-lg border border-amber-200 font-bold text-amber-950 flex items-center gap-2">
+                                <CreditCard size={15} className="text-amber-800" />
+                                <span>{order.paymentMethod}</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </motion.div>
                     )}
@@ -8997,6 +9025,22 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase opacity-60">Forma de Pagamento</label>
+                  <select
+                    className="w-full p-3 rounded-xl border border-gray-300 bg-white font-semibold text-gray-900"
+                    value={editOrderForm.paymentMethod || ''}
+                    onChange={e => setEditOrderForm({...editOrderForm, paymentMethod: e.target.value})}
+                  >
+                    <option value="">Não informado</option>
+                    <option value="Pix">Pix</option>
+                    <option value="Dinheiro">Dinheiro</option>
+                    <option value="Cartão de Crédito">Cartão de Crédito</option>
+                    <option value="Cartão de Débito">Cartão de Débito</option>
+                    <option value="Link de Pagamento">Link de Pagamento</option>
+                  </select>
                 </div>
 
                 {/* --- SEÇÃO DE ITENS DO PEDIDO --- */}
