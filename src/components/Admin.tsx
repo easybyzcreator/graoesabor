@@ -2148,29 +2148,31 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
+              html { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { width: ${printWidth} !important; max-width: ${printWidth} !important; margin: 0 !important; padding: 2mm 1.5mm !important; color: #000 !important; background: #fff !important; }
             }
             * { box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+              font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth};
-              padding: 1.5mm 1mm; 
+              padding: 2mm 1.5mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '13px' : '12px'}; 
+              font-size: ${is80 ? '12pt' : '11.5pt'}; 
+              letter-spacing: 0.025em;
               color: #000;
-              line-height: 1.35;
+              line-height: 1.4;
               -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16pt' : '15pt'}; font-weight: 700; margin: 0 0 3px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5pt' : '11pt'}; font-weight: 600; margin: 2px 0 0 0; }
             .order-block { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 6px; }
-            .order-header { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; }
-            .order-details { font-size: ${is80 ? '12px' : '11px'}; margin: 2px 0; }
-            .order-items { white-space: pre-wrap; font-size: ${is80 ? '12px' : '11px'}; margin: 3px 0; padding: 2px 0; }
-            .order-total { text-align: right; font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; }
-            .total-sum { font-size: ${is80 ? '14px' : '13px'}; font-weight: 700; text-align: right; border-top: 2px solid #000; padding-top: 4px; margin-top: 8px; text-transform: uppercase; }
+            .order-header { font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; }
+            .order-details { font-size: ${is80 ? '11.5pt' : '11pt'}; margin: 3px 0; }
+            .order-items { white-space: pre-wrap; font-size: ${is80 ? '11.5pt' : '11pt'}; margin: 4px 0; padding: 2px 0; }
+            .order-total { text-align: right; font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; }
+            .total-sum { font-size: ${is80 ? '13.5pt' : '12.5pt'}; font-weight: 700; text-align: right; border-top: 2px solid #000; padding-top: 5px; margin-top: 8px; text-transform: uppercase; }
           </style>
         </head>
         <body>
@@ -2179,7 +2181,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total de Pedidos: ${filteredOrders.length}</p>
           </div>
-          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11px;">Nenhum pedido encontrado.</div>'}
+          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11pt;">Nenhum pedido encontrado.</div>'}
           <div class="total-sum">
             SOMA: ${currencySymbol} ${totalSum.toFixed(2).replace('.', ',')}
           </div>
@@ -2338,30 +2340,32 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
+              html { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { width: ${printWidth} !important; max-width: ${printWidth} !important; margin: 0 !important; padding: 2mm 1.5mm !important; color: #000 !important; background: #fff !important; }
             }
             * { box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif; 
+              font-family: 'Segoe UI', Arial, Helvetica, sans-serif; 
               width: ${printWidth}; 
               max-width: ${printWidth}; 
-              padding: 1.5mm 1mm; 
+              padding: 2mm 1.5mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '13px' : '12px'}; 
+              font-size: ${is80 ? '12pt' : '11.5pt'}; 
+              letter-spacing: 0.025em;
               color: #000;
-              line-height: 1.35;
+              line-height: 1.4;
               -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
-            .category-block { margin-top: 8px; }
-            .category-title { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; border-bottom: 1.5px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
-            .product-block { margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 4px; }
-            .product-title { font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'}; }
-            .product-desc { font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; margin: 2px 0; }
-            .product-catalog { font-size: ${is80 ? '11px' : '10px'}; font-style: italic; }
-            .product-price { font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'}; white-space: pre-wrap; margin-top: 2px; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16pt' : '15pt'}; font-weight: 700; margin: 0 0 3px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5pt' : '11pt'}; font-weight: 600; margin: 2px 0 0 0; }
+            .category-block { margin-top: 10px; }
+            .category-title { font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; border-bottom: 1.5px solid #000; padding-bottom: 2px; margin-bottom: 5px; text-transform: uppercase; }
+            .product-block { margin-bottom: 7px; border-bottom: 1px dashed #000; padding-bottom: 5px; }
+            .product-title { font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; }
+            .product-desc { font-size: ${is80 ? '11pt' : '10.5pt'}; color: #000; margin: 2px 0; }
+            .product-catalog { font-size: ${is80 ? '10.5pt' : '10pt'}; }
+            .product-price { font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; white-space: pre-wrap; margin-top: 2px; }
           </style>
         </head>
         <body>
@@ -2371,7 +2375,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total: ${products.length} itens</p>
           </div>
-          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11px;">Nenhum produto cadastrado.</div>'}
+          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11pt;">Nenhum produto cadastrado.</div>'}
         </body>
       </html>
     `);
@@ -2511,26 +2515,28 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
+              html { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { width: ${printWidth} !important; max-width: ${printWidth} !important; margin: 0 !important; padding: 2mm 1.5mm !important; color: #000 !important; background: #fff !important; }
             }
             * { box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif; 
+              font-family: 'Segoe UI', Arial, Helvetica, sans-serif; 
               width: ${printWidth}; 
               max-width: ${printWidth}; 
-              padding: 1.5mm 1mm; 
+              padding: 2mm 1.5mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '13px' : '12px'}; 
+              font-size: ${is80 ? '12pt' : '11.5pt'}; 
+              letter-spacing: 0.025em;
               color: #000;
-              line-height: 1.35;
+              line-height: 1.4;
               -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16pt' : '15pt'}; font-weight: 700; margin: 0 0 3px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5pt' : '11pt'}; font-weight: 600; margin: 2px 0 0 0; }
             .section { margin-bottom: 10px; }
-            .section-title { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; border-bottom: 1.5px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
-            .summary-row { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #000; }
+            .section-title { font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'}; border-bottom: 1.5px solid #000; padding-bottom: 3px; margin-bottom: 5px; text-transform: uppercase; }
+            .summary-row { display: flex; justify-content: space-between; gap: 6px; padding: 4px 0; border-bottom: 1px dashed #000; }
             .summary-row .title { max-width: 80%; }
             .summary-row .qty { font-weight: 700; white-space: nowrap; }
           </style>
@@ -2852,8 +2858,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const is80 = format === '80mm';
     const paperWidth = is80 ? '80mm' : '58mm';
     const printWidth = is80 ? '72mm' : '48mm';
-    const bodyFont = is80 ? '13px' : '12px';
-    const titleFont = is80 ? '16px' : '15px';
+    const bodyFont = is80 ? '12pt' : '11.5pt';
+    const titleFont = is80 ? '17pt' : '16pt';
+    const headerDateFont = is80 ? '12pt' : '11.5pt';
+    const subFont = is80 ? '11.5pt' : '11pt';
+    const metaFont = is80 ? '11pt' : '10.5pt';
+    const totalFont = is80 ? '15pt' : '14pt';
 
     let itemsHtml = order.items.map(item => {
       let optionsHtml = '';
@@ -2900,37 +2910,39 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
+              html { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { width: ${printWidth} !important; max-width: ${printWidth} !important; margin: 0 !important; padding: 2mm 1.5mm !important; color: #000 !important; background: #fff !important; }
             }
             * { box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+              font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth}; 
-              padding: 1.5mm 1mm; 
+              padding: 2mm 1.5mm; 
               margin: 0 auto; 
               font-size: ${bodyFont}; 
+              letter-spacing: 0.025em;
               color: #000;
-              line-height: 1.35;
+              line-height: 1.4;
               -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 7px; }
-            .header h2 { margin: 0; font-size: ${titleFont}; text-transform: uppercase; font-weight: 700; }
-            .header p { margin: 2px 0 0 0; font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; }
-            .section { margin-bottom: 5px; word-wrap: break-word; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 6px; margin-bottom: 8px; }
+            .header h2 { margin: 0; font-size: ${titleFont}; text-transform: uppercase; font-weight: 700; letter-spacing: 0.03em; }
+            .header p { margin: 3px 0 0 0; font-size: ${headerDateFont}; font-weight: 600; color: #000; }
+            .section { margin-bottom: 6px; word-wrap: break-word; }
             .label { font-weight: 700; font-size: ${bodyFont}; text-transform: uppercase; color: #000; }
-            .value { font-size: ${bodyFont}; color: #000; }
-            .item-row { border-bottom: 1px dashed #000; padding: 4px 0; font-size: ${bodyFont}; }
+            .value { font-size: ${bodyFont}; font-weight: 500; color: #000; }
+            .item-row { border-bottom: 1px dashed #000; padding: 5px 0; font-size: ${bodyFont}; }
             .item-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; font-weight: 700; }
             .item-name { flex: 1; min-width: 0; word-wrap: break-word; }
             .item-price { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
-            .item-sub { font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; padding-left: 6px; margin-top: 2px; line-height: 1.3; }
-            .divider { border-top: 1px dashed #000; margin: 5px 0; }
-            .double-divider { border-top: 2px solid #000; margin: 5px 0; }
-            .meta-info { font-size: ${is80 ? '11px' : '10px'}; color: #000; line-height: 1.35; }
-            .total-section { text-align: right; font-size: ${is80 ? '12px' : '11px'}; font-weight: 600; margin-top: 5px; color: #000; }
-            .total { text-align: right; font-weight: 700; font-size: ${is80 ? '15.5px' : '14px'}; margin-top: 5px; text-transform: uppercase; border-top: 2px solid #000; padding-top: 4px; color: #000; }
-            .footer-receipt { text-align: center; font-size: ${is80 ? '11px' : '10.5px'}; color: #000; margin-top: 7px; padding-top: 5px; border-top: 1px dashed #000; line-height: 1.35; }
+            .item-sub { font-size: ${subFont}; font-weight: 500; color: #000; padding-left: 6px; margin-top: 3px; line-height: 1.38; }
+            .divider { border-top: 1px dashed #000; margin: 6px 0; }
+            .double-divider { border-top: 2px solid #000; margin: 6px 0; }
+            .meta-info { font-size: ${metaFont}; font-weight: 500; color: #000; line-height: 1.4; }
+            .total-section { text-align: right; font-size: ${subFont}; font-weight: 600; margin-top: 6px; color: #000; }
+            .total { text-align: right; font-weight: 700; font-size: ${totalFont}; margin-top: 6px; text-transform: uppercase; border-top: 2px solid #000; padding-top: 5px; color: #000; }
+            .footer-receipt { text-align: center; font-size: ${metaFont}; font-weight: 600; color: #000; margin-top: 8px; padding-top: 6px; border-top: 1px dashed #000; line-height: 1.4; }
           </style>
         </head>
         <body>
@@ -2971,7 +2983,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div class="divider"></div>
           
           <div class="section">
-            <div class="label" style="margin-bottom: 3px;">ITENS DO PEDIDO:</div>
+            <div class="label" style="margin-bottom: 4px;">ITENS DO PEDIDO:</div>
             ${itemsHtml}
           </div>
           
@@ -2986,7 +2998,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div class="divider"></div>
           <div class="section">
             <div class="label">OBSERVAÇÃO:</div>
-            <div class="value" style="font-style: italic;">${order.observation.toUpperCase()}</div>
+            <div class="value">${order.observation.toUpperCase()}</div>
           </div>
           ` : ''}
           
@@ -3107,31 +3119,33 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
+              html { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { width: ${printWidth} !important; max-width: ${printWidth} !important; margin: 0 !important; padding: 2mm 1.5mm !important; color: #000 !important; background: #fff !important; }
             }
             * { box-sizing: border-box; }
             body { 
-              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
+              font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth}; 
-              padding: 1.5mm 1mm; 
+              padding: 2mm 1.5mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '13px' : '12px'}; 
+              font-size: ${is80 ? '12pt' : '11.5pt'}; 
+              letter-spacing: 0.025em;
               color: #000;
-              line-height: 1.35;
+              line-height: 1.4;
               -webkit-print-color-adjust: exact;
             }
             .center { text-align: center; }
-            .divider { border-top: 1px dashed #000; margin: 5px 0; }
-            .double { border-top: 2px solid #000; margin: 5px 0; }
-            .row { display: flex; justify-content: space-between; gap: 6px; padding: 2px 0; }
+            .divider { border-top: 1px dashed #000; margin: 6px 0; }
+            .double { border-top: 2px solid #000; margin: 6px 0; }
+            .row { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; }
             .row span:last-child { white-space: nowrap; flex-shrink: 0; }
           </style>
         </head>
         <body>
           <div class="center">
-            <h2 style="margin: 0; font-size: ${is80 ? '16px' : '15px'}; font-weight: 700;">${brand}</h2>
-            <div style="font-size: ${is80 ? '11.5px' : '10.5px'}; font-weight: 700; margin: 2px 0;">TESTE DE IMPRESSÃO TÉRMICA (${paperWidth.toUpperCase()})</div>
+            <h2 style="margin: 0; font-size: ${is80 ? '17pt' : '16pt'}; font-weight: 700; letter-spacing: 0.03em;">${brand}</h2>
+            <div style="font-size: ${is80 ? '11.5pt' : '11pt'}; font-weight: 700; margin: 3px 0;">TESTE DE IMPRESSÃO TÉRMICA (${paperWidth.toUpperCase()})</div>
           </div>
           <div class="double"></div>
           <div><strong>FORMATO:</strong> Bobina ${paperWidth}</div>
@@ -3139,14 +3153,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div><strong>STATUS:</strong> CONFIGURADA E ATIVA</div>
           <div><strong>DATA:</strong> ${new Date().toLocaleString('pt-BR')}</div>
           <div class="divider"></div>
-          <div class="center" style="font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'};">EXEMPLO DE COMANDA</div>
+          <div class="center" style="font-weight: 700; font-size: ${is80 ? '12pt' : '11.5pt'};">EXEMPLO DE COMANDA</div>
           <div class="divider"></div>
           <div class="row"><span>1x Bolo Especial</span><span>R$ 45,00</span></div>
           <div class="row"><span>1x Café Artesanal</span><span>R$ 12,00</span></div>
           <div class="divider"></div>
-          <div class="row" style="font-weight: 700; font-size: ${is80 ? '15.5px' : '14px'};"><span>TOTAL:</span><span>R$ 57,00</span></div>
+          <div class="row" style="font-weight: 700; font-size: ${is80 ? '15pt' : '14pt'};"><span>TOTAL:</span><span>R$ 57,00</span></div>
           <div class="double"></div>
-          <div class="center" style="font-size: ${is80 ? '11px' : '10.5px'};">
+          <div class="center" style="font-size: ${is80 ? '11pt' : '10.5pt'}; font-weight: 600;">
             IMPRESSORA CONFIGURADA COM SUCESSO!<br/>
             ${brand}
           </div>
