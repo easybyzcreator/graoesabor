@@ -2148,27 +2148,29 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
             }
+            * { box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth};
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '11px' : '10px'}; 
+              font-size: ${is80 ? '13px' : '12px'}; 
               color: #000;
-              line-height: 1.25;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: 8.5px; margin: 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
             .order-block { margin-bottom: 10px; border-bottom: 1px dashed #000; padding-bottom: 6px; }
-            .order-header { font-weight: bold; font-size: ${is80 ? '11.5px' : '10.5px'}; }
-            .order-details { font-size: 9px; margin: 2px 0; }
-            .order-items { white-space: pre-wrap; font-size: 9.5px; margin: 3px 0; background: #fafafa; padding: 2px; }
-            .order-total { text-align: right; font-weight: bold; font-size: 10px; }
-            .total-sum { font-size: 11px; font-weight: bold; text-align: right; border-top: 2px solid #000; padding-top: 4px; margin-top: 8px; text-transform: uppercase; }
+            .order-header { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; }
+            .order-details { font-size: ${is80 ? '12px' : '11px'}; margin: 2px 0; }
+            .order-items { white-space: pre-wrap; font-size: ${is80 ? '12px' : '11px'}; margin: 3px 0; padding: 2px 0; }
+            .order-total { text-align: right; font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; }
+            .total-sum { font-size: ${is80 ? '14px' : '13px'}; font-weight: 700; text-align: right; border-top: 2px solid #000; padding-top: 4px; margin-top: 8px; text-transform: uppercase; }
           </style>
         </head>
         <body>
@@ -2177,7 +2179,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total de Pedidos: ${filteredOrders.length}</p>
           </div>
-          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #666; font-size: 9px;">Nenhum pedido encontrado.</div>'}
+          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11px;">Nenhum pedido encontrado.</div>'}
           <div class="total-sum">
             SOMA: ${currencySymbol} ${totalSum.toFixed(2).replace('.', ',')}
           </div>
@@ -2336,28 +2338,30 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
             }
+            * { box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif; 
               width: ${printWidth}; 
               max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '11px' : '10px'}; 
+              font-size: ${is80 ? '13px' : '12px'}; 
               color: #000;
-              line-height: 1.25;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: 8.5px; margin: 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
             .category-block { margin-top: 8px; }
-            .category-title { font-weight: bold; font-size: 10px; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
-            .product-block { margin-bottom: 6px; border-bottom: 1px dashed #ccc; padding-bottom: 3px; }
-            .product-title { font-weight: bold; font-size: 10px; }
-            .product-desc { font-size: 8.5px; color: #444; margin: 1px 0; }
-            .product-catalog { font-size: 8.5px; font-style: italic; }
-            .product-price { font-weight: bold; font-size: 10px; white-space: pre-wrap; margin-top: 2px; }
+            .category-title { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; border-bottom: 1.5px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
+            .product-block { margin-bottom: 6px; border-bottom: 1px dashed #000; padding-bottom: 4px; }
+            .product-title { font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'}; }
+            .product-desc { font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; margin: 2px 0; }
+            .product-catalog { font-size: ${is80 ? '11px' : '10px'}; font-style: italic; }
+            .product-price { font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'}; white-space: pre-wrap; margin-top: 2px; }
           </style>
         </head>
         <body>
@@ -2367,7 +2371,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <p>Gerado: ${new Date().toLocaleString('pt-BR')}</p>
             <p>Total: ${products.length} itens</p>
           </div>
-          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #666; font-size: 9px;">Nenhum produto cadastrado.</div>'}
+          ${contentHtml || '<div style="text-align: center; padding: 10px; color: #000; font-size: 11px;">Nenhum produto cadastrado.</div>'}
         </body>
       </html>
     `);
@@ -2507,26 +2511,28 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
             }
+            * { box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif; 
               width: ${printWidth}; 
               max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '11px' : '10px'}; 
+              font-size: ${is80 ? '13px' : '12px'}; 
               color: #000;
-              line-height: 1.25;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 8px; }
-            .header h1 { font-size: ${is80 ? '13px' : '11px'}; margin: 0 0 2px 0; text-transform: uppercase; }
-            .header p { font-size: 8.5px; margin: 0; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 8px; }
+            .header h1 { font-size: ${is80 ? '16px' : '14px'}; font-weight: 700; margin: 0 0 2px 0; text-transform: uppercase; }
+            .header p { font-size: ${is80 ? '11.5px' : '10.5px'}; margin: 1px 0 0 0; }
             .section { margin-bottom: 10px; }
-            .section-title { font-weight: bold; font-size: 10px; border-bottom: 1px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
-            .summary-row { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px dashed #ccc; }
+            .section-title { font-weight: 700; font-size: ${is80 ? '13px' : '12px'}; border-bottom: 1.5px solid #000; padding-bottom: 2px; margin-bottom: 4px; text-transform: uppercase; }
+            .summary-row { display: flex; justify-content: space-between; gap: 6px; padding: 3px 0; border-bottom: 1px dashed #000; }
             .summary-row .title { max-width: 80%; }
-            .summary-row .qty { font-weight: bold; }
+            .summary-row .qty { font-weight: 700; white-space: nowrap; }
           </style>
         </head>
         <body>
@@ -2537,16 +2543,16 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           </div>
           
           <div class="section">
-            <div class="section-title"> TOTAL DE ITENS</div>
+            <div class="section-title">TOTAL DE ITENS</div>
             <div>
-              ${itemsHtml || '<div style="text-align: center; padding: 5px; color: #666;">Nenhum item no período.</div>'}
+              ${itemsHtml || '<div style="text-align: center; padding: 5px; color: #000;">Nenhum item no período.</div>'}
             </div>
           </div>
 
           <div class="section">
-            <div class="section-title">➕ ACOMPANHAMENTOS</div>
+            <div class="section-title">ACOMPANHAMENTOS</div>
             <div>
-              ${sidesHtml || '<div style="text-align: center; padding: 5px; color: #666;">Nenhum acompanhamento.</div>'}
+              ${sidesHtml || '<div style="text-align: center; padding: 5px; color: #000;">Nenhum acompanhamento.</div>'}
             </div>
           </div>
         </body>
@@ -2846,8 +2852,8 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const is80 = format === '80mm';
     const paperWidth = is80 ? '80mm' : '58mm';
     const printWidth = is80 ? '72mm' : '48mm';
-    const bodyFont = is80 ? '11px' : '10px';
-    const titleFont = is80 ? '13px' : '12px';
+    const bodyFont = is80 ? '13px' : '12px';
+    const titleFont = is80 ? '16px' : '15px';
 
     let itemsHtml = order.items.map(item => {
       let optionsHtml = '';
@@ -2879,8 +2885,8 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       return `
         <div class="item-row">
           <div class="item-main">
-            <span>${item.quantity}x ${item.title.toUpperCase()}${item.selectedSize ? ` (${item.selectedSize.name.toUpperCase()})` : ''}</span>
-            <span>${currencySymbol} ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+            <span class="item-name">${item.quantity}x ${item.title.toUpperCase()}${item.selectedSize ? ` (${item.selectedSize.name.toUpperCase()})` : ''}</span>
+            <span class="item-price">${currencySymbol} ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
           </div>
           ${optionsHtml}
         </div>
@@ -2894,32 +2900,37 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
             }
+            * { box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
               font-size: ${bodyFont}; 
               color: #000;
-              line-height: 1.25;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
             }
-            .header { text-align: center; border-bottom: 2px double #000; padding-bottom: 4px; margin-bottom: 6px; }
-            .header h2 { margin: 0; font-size: ${titleFont}; text-transform: uppercase; font-weight: bold; }
-            .header p { margin: 1px 0 0 0; font-size: 8.5px; }
-            .section { margin-bottom: 5px; }
-            .label { font-weight: bold; font-size: 9px; text-transform: uppercase; }
-            .value { font-size: 10px; margin-top: 1px; }
-            .item-row { border-bottom: 1px dashed #000; padding: 3px 0; font-size: 10px; }
-            .item-main { display: flex; justify-content: space-between; font-weight: bold; }
-            .item-sub { font-size: 8.5px; color: #222; padding-left: 6px; margin-top: 2px; line-height: 1.2; }
-            .divider { border-top: 1px dashed #000; margin: 4px 0; }
-            .double-divider { border-top: 2px solid #000; margin: 4px 0; }
-            .total-section { text-align: right; font-size: 9px; margin-top: 4px; }
-            .total { text-align: right; font-weight: bold; font-size: 11.5px; margin-top: 4px; text-transform: uppercase; border-top: 1.5px solid #000; padding-top: 3px; }
-            .footer-receipt { text-align: center; font-size: 8px; margin-top: 6px; padding-top: 4px; border-top: 1px dashed #000; }
+            .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 5px; margin-bottom: 7px; }
+            .header h2 { margin: 0; font-size: ${titleFont}; text-transform: uppercase; font-weight: 700; }
+            .header p { margin: 2px 0 0 0; font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; }
+            .section { margin-bottom: 5px; word-wrap: break-word; }
+            .label { font-weight: 700; font-size: ${bodyFont}; text-transform: uppercase; color: #000; }
+            .value { font-size: ${bodyFont}; color: #000; }
+            .item-row { border-bottom: 1px dashed #000; padding: 4px 0; font-size: ${bodyFont}; }
+            .item-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; font-weight: 700; }
+            .item-name { flex: 1; min-width: 0; word-wrap: break-word; }
+            .item-price { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
+            .item-sub { font-size: ${is80 ? '11.5px' : '10.5px'}; color: #000; padding-left: 6px; margin-top: 2px; line-height: 1.3; }
+            .divider { border-top: 1px dashed #000; margin: 5px 0; }
+            .double-divider { border-top: 2px solid #000; margin: 5px 0; }
+            .meta-info { font-size: ${is80 ? '11px' : '10px'}; color: #000; line-height: 1.35; }
+            .total-section { text-align: right; font-size: ${is80 ? '12px' : '11px'}; font-weight: 600; margin-top: 5px; color: #000; }
+            .total { text-align: right; font-weight: 700; font-size: ${is80 ? '15.5px' : '14px'}; margin-top: 5px; text-transform: uppercase; border-top: 2px solid #000; padding-top: 4px; color: #000; }
+            .footer-receipt { text-align: center; font-size: ${is80 ? '11px' : '10.5px'}; color: #000; margin-top: 7px; padding-top: 5px; border-top: 1px dashed #000; line-height: 1.35; }
           </style>
         </head>
         <body>
@@ -2960,7 +2971,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div class="divider"></div>
           
           <div class="section">
-            <div class="label" style="margin-bottom: 2px;">ITENS DO PEDIDO:</div>
+            <div class="label" style="margin-bottom: 3px;">ITENS DO PEDIDO:</div>
             ${itemsHtml}
           </div>
           
@@ -2980,7 +2991,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           ` : ''}
           
           <div class="divider"></div>
-          <div class="section" style="opacity: 0.85; font-size: 8.5px;">
+          <div class="section meta-info">
             ID: ${order.id}<br/>
             DATA DO PEDIDO: ${dateStr}
           </div>
@@ -2988,7 +2999,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           ${(order.deliveryFee !== undefined && order.deliveryFee > 0) ? `
           <div class="total-section">
             <div>SUBTOTAL: ${currencySymbol} ${(order.subtotal || (order.total - (order.deliveryFee || 0))).toFixed(2).replace('.', ',')}</div>
-            <div style="margin-top: 1px;">TAXA ENTREGA ${order.deliveryDistanceKm ? `(${order.deliveryDistanceKm} km)` : ''}: + ${currencySymbol} ${order.deliveryFee.toFixed(2).replace('.', ',')}</div>
+            <div style="margin-top: 2px;">TAXA ENTREGA ${order.deliveryDistanceKm ? `(${order.deliveryDistanceKm} km)` : ''}: + ${currencySymbol} ${order.deliveryFee.toFixed(2).replace('.', ',')}</div>
           </div>
           ` : order.deliveryType === 'pickup' ? `
           <div class="total-section">
@@ -3096,28 +3107,31 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
-              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; }
+              html, body { width: ${paperWidth} !important; margin: 0 !important; padding: 0 !important; color: #000 !important; background: #fff !important; }
             }
+            * { box-sizing: border-box; }
             body { 
-              font-family: 'Courier New', Courier, monospace; 
+              font-family: 'Segoe UI', Tahoma, Arial, Helvetica, sans-serif;
               width: ${printWidth}; 
               max-width: ${printWidth}; 
               padding: 1.5mm 1mm; 
               margin: 0 auto; 
-              font-size: ${is80 ? '11px' : '10px'}; 
+              font-size: ${is80 ? '13px' : '12px'}; 
               color: #000;
-              line-height: 1.25;
+              line-height: 1.35;
+              -webkit-print-color-adjust: exact;
             }
             .center { text-align: center; }
-            .divider { border-top: 1px dashed #000; margin: 4px 0; }
+            .divider { border-top: 1px dashed #000; margin: 5px 0; }
             .double { border-top: 2px solid #000; margin: 5px 0; }
-            .row { display: flex; justify-content: space-between; }
+            .row { display: flex; justify-content: space-between; gap: 6px; padding: 2px 0; }
+            .row span:last-child { white-space: nowrap; flex-shrink: 0; }
           </style>
         </head>
         <body>
           <div class="center">
-            <h2 style="margin: 0; font-size: ${is80 ? '14px' : '12px'};">${brand}</h2>
-            <div style="font-size: 8px; font-weight: bold; margin: 2px 0;">TESTE DE IMPRESSÃO TÉRMICA (${paperWidth.toUpperCase()})</div>
+            <h2 style="margin: 0; font-size: ${is80 ? '16px' : '15px'}; font-weight: 700;">${brand}</h2>
+            <div style="font-size: ${is80 ? '11.5px' : '10.5px'}; font-weight: 700; margin: 2px 0;">TESTE DE IMPRESSÃO TÉRMICA (${paperWidth.toUpperCase()})</div>
           </div>
           <div class="double"></div>
           <div><strong>FORMATO:</strong> Bobina ${paperWidth}</div>
@@ -3125,14 +3139,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <div><strong>STATUS:</strong> CONFIGURADA E ATIVA</div>
           <div><strong>DATA:</strong> ${new Date().toLocaleString('pt-BR')}</div>
           <div class="divider"></div>
-          <div class="center" style="font-weight: bold; font-size: 9px;">EXEMPLO DE COMANDA</div>
+          <div class="center" style="font-weight: 700; font-size: ${is80 ? '12.5px' : '11.5px'};">EXEMPLO DE COMANDA</div>
           <div class="divider"></div>
           <div class="row"><span>1x Bolo Especial</span><span>R$ 45,00</span></div>
           <div class="row"><span>1x Café Artesanal</span><span>R$ 12,00</span></div>
           <div class="divider"></div>
-          <div class="row" style="font-weight: bold; font-size: 11px;"><span>TOTAL:</span><span>R$ 57,00</span></div>
+          <div class="row" style="font-weight: 700; font-size: ${is80 ? '15.5px' : '14px'};"><span>TOTAL:</span><span>R$ 57,00</span></div>
           <div class="double"></div>
-          <div class="center" style="font-size: 8px;">
+          <div class="center" style="font-size: ${is80 ? '11px' : '10.5px'};">
             IMPRESSORA CONFIGURADA COM SUCESSO!<br/>
             ${brand}
           </div>
