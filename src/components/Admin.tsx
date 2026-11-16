@@ -2570,31 +2570,101 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const format = formatOverride || settings?.printerFormat || 'a4';
     const dateStr = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('pt-BR') : 'N/A';
     const brand = settings?.brandName || 'Grão & Sabor';
+    const escapeHtml = (val?: string | number | null) =>
+      String(val ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    const formatMultiline = (val?: string | null) => escapeHtml((val || '').trim()).replace(/\r?\n/g, '<br/>');
+
+    const buildItemDetailsHtml = (item: Order['items'][number], isThermal: boolean) => {
+      const blocks: string[] = [];
+
+      if (item.comboSelections && item.comboSelections.length > 0) {
+        const totalUnits = item.comboSelections.reduce((acc, s) => acc + (s.quantity ?? s.count ?? 1), 0);
+        const lines = item.comboSelections.map(sel => {
+          const selQty = sel.quantity ?? sel.count ?? 1;
+          const totalProduction = selQty * (item.quantity || 1);
+          const qtySuffix = item.quantity > 1 ? ` (Total produção: ${totalProduction}x)` : '';
+          return `<div class="combo-line">• <strong>${selQty}x</strong> ${escapeHtml(isThermal ? sel.dishTitle.toUpperCase() : sel.dishTitle)}${escapeHtml(qtySuffix)}</div>`;
+        }).join('');
+        blocks.push(`
+          <div class="combo-box">
+            <div class="combo-title">ITENS ESCOLHIDOS NO COMBO (${totalUnits} UN${item.quantity > 1 ? ` × ${item.quantity}` : ''}):</div>
+            ${lines}
+          </div>
+        `);
+      }
+
+      if (item.cakeOptions && (item.cakeOptions.size || item.cakeOptions.dough || (item.cakeOptions.fillings && item.cakeOptions.fillings.length > 0) || item.cakeOptions.topping || item.cakeOptions.topper || item.cakeOptions.styleNumber)) {
+        blocks.push(`
+          <div class="item-sub">
+            ${item.cakeOptions.size ? `<div><strong>${isThermal ? 'TAMANHO:' : 'Tamanho:'}</strong> ${escapeHtml(item.cakeOptions.size)}</div>` : ''}
+            ${item.cakeOptions.dough ? `<div><strong>${isThermal ? 'MASSA:' : 'Massa:'}</strong> ${escapeHtml(item.cakeOptions.dough)}</div>` : ''}
+            ${item.cakeOptions.fillings && item.cakeOptions.fillings.length > 0 ? `<div><strong>${isThermal ? 'RECHEIOS:' : 'Recheios:'}</strong> ${escapeHtml(item.cakeOptions.fillings.join(', '))}</div>` : ''}
+            ${item.cakeOptions.topping ? `<div><strong>${isThermal ? 'COBERTURA:' : 'Cobertura:'}</strong> ${escapeHtml(item.cakeOptions.topping)}</div>` : ''}
+            ${item.cakeOptions.topper ? `<div><strong>${isThermal ? 'TOPPER:' : 'Topper:'}</strong> ${escapeHtml(item.cakeOptions.topper)}</div>` : ''}
+            ${item.cakeOptions.styleNumber ? `<div><strong>${isThermal ? 'REFERÊNCIA FOTO:' : 'Referência:'}</strong> Nº ${escapeHtml(item.cakeOptions.styleNumber)}</div>` : ''}
+          </div>
+        `);
+      }
+
+      if (item.sandwichOptions && item.sandwichOptions.fillings && item.sandwichOptions.fillings.length > 0) {
+        blocks.push(`
+          <div class="item-sub">
+            <div><strong>${isThermal ? 'RECHEIOS / OPÇÕES:' : 'Recheios / Opções:'}</strong> ${escapeHtml(item.sandwichOptions.fillings.join(', '))}</div>
+          </div>
+        `);
+      }
+
+      if (item.mealOptions) {
+        const normalSides = (item.mealOptions.sides || []).filter(s => s.type !== 'swap');
+        const swapSides = (item.mealOptions.sides || []).filter(s => s.type === 'swap');
+        const groupSideNames = (arr: typeof normalSides) => {
+          const grouped = arr.reduce((acc: Record<string, number>, s) => {
+            acc[s.name] = (acc[s.name] || 0) + 1;
+            return acc;
+          }, {});
+          return Object.entries(grouped)
+            .map(([name, q]) => `${name}${q > 1 ? ` (${q}x)` : ''}`)
+            .join(', ');
+        };
+        const hasRemovals = item.mealOptions.removals && item.mealOptions.removals.length > 0;
+        if (hasRemovals || normalSides.length > 0 || swapSides.length > 0) {
+          blocks.push(`
+            <div class="item-sub">
+              ${hasRemovals ? `<div><strong>${isThermal ? 'REMOVER / SEM:' : 'Remover / Sem:'}</strong> ${escapeHtml(item.mealOptions.removals.join(', '))}</div>` : ''}
+              ${normalSides.length > 0 ? `<div><strong>${isThermal ? 'ACOMPANHAMENTOS:' : 'Acompanhamentos:'}</strong> ${escapeHtml(groupSideNames(normalSides))}</div>` : ''}
+              ${swapSides.length > 0 ? `<div><strong>${isThermal ? 'SUBSTITUIÇÕES / TROCAS:' : 'Substituições / Trocas:'}</strong> ${escapeHtml(groupSideNames(swapSides))}</div>` : ''}
+            </div>
+          `);
+        }
+      }
+
+      if (item.observation && item.observation.trim()) {
+        blocks.push(`
+          <div class="item-sub item-obs">
+            <strong>${isThermal ? 'OBS DO ITEM:' : 'Obs do item:'}</strong> ${formatMultiline(item.observation)}
+          </div>
+        `);
+      }
+
+      return blocks.join('');
+    };
+
+    const getItemDisplayTitle = (item: Order['items'][number], uppercase: boolean) => {
+      const sizeSuffix = item.selectedSize && !item.title.includes(`(${item.selectedSize.name})`)
+        ? ` (${item.selectedSize.name})`
+        : '';
+      const full = `${item.title}${sizeSuffix}`;
+      return escapeHtml(uppercase ? full.toUpperCase() : full);
+    };
 
     if (format === 'a4') {
       const itemsRowsHtml = order.items.map(item => {
-        let optionsHtml = '';
-        if (item.cakeOptions && (item.cakeOptions.size || item.cakeOptions.dough || item.cakeOptions.fillings)) {
-          optionsHtml = `
-            <div class="item-sub">
-              ${item.cakeOptions.size ? `<div><strong>Tamanho:</strong> ${item.cakeOptions.size}</div>` : ''}
-              ${item.cakeOptions.dough ? `<div><strong>Massa:</strong> ${item.cakeOptions.dough}</div>` : ''}
-              ${item.cakeOptions.fillings && item.cakeOptions.fillings.length > 0 ? `<div><strong>Recheios:</strong> ${item.cakeOptions.fillings.join(', ')}</div>` : ''}
-              ${item.cakeOptions.topping ? `<div><strong>Cobertura:</strong> ${item.cakeOptions.topping}</div>` : ''}
-              ${item.cakeOptions.topper ? `<div><strong>Topper:</strong> ${item.cakeOptions.topper}</div>` : ''}
-            </div>
-          `;
-        } else if (item.sandwichOptions && item.sandwichOptions.fillings && item.sandwichOptions.fillings.length > 0) {
-          optionsHtml = `<div class="item-sub"><strong>Recheios:</strong> ${item.sandwichOptions.fillings.join(', ')}</div>`;
-        } else if (item.mealOptions) {
-          optionsHtml = `
-            <div class="item-sub">
-              ${item.mealOptions.removals.length > 0 ? `<div><strong>Remover:</strong> ${item.mealOptions.removals.join(', ')}</div>` : ''}
-              ${item.mealOptions.sides.length > 0 ? `<div><strong>Acompanhamentos:</strong> ${item.mealOptions.sides.map(s => s.name).join(', ')}</div>` : ''}
-            </div>
-          `;
-        }
-
+        const optionsHtml = buildItemDetailsHtml(item, false);
         const unitPrice = item.price.toFixed(2).replace('.', ',');
         const totalItemPrice = (item.price * item.quantity).toFixed(2).replace('.', ',');
 
@@ -2602,7 +2672,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           <tr>
             <td style="text-align: center; font-weight: bold; width: 45px;">${item.quantity}x</td>
             <td>
-              <div class="item-title">${item.title}${item.selectedSize ? ` (${item.selectedSize.name})` : ''}</div>
+              <div class="item-title">${getItemDisplayTitle(item, false)}</div>
               ${optionsHtml}
             </td>
             <td style="text-align: right; width: 95px;">${currencySymbol} ${unitPrice}</td>
@@ -2708,26 +2778,51 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
               .item-title { font-weight: 700; color: #111827; }
               .item-sub {
                 font-size: 11px;
-                color: #4b5563;
-                margin-top: 2px;
-                padding-left: 6px;
-                border-left: 2px solid #e5e7eb;
+                color: #374151;
+                margin-top: 3px;
+                padding-left: 8px;
+                border-left: 2px solid #d1d5db;
+              }
+              .item-obs {
+                color: #92400e;
+                border-left-color: #f59e0b;
+              }
+              .combo-box {
+                background: #fffbeb;
+                border: 1px solid #fde68a;
+                border-left: 3px solid #d97706;
+                border-radius: 6px;
+                padding: 6px 9px;
+                margin-top: 5px;
+                font-size: 11.5px;
+                color: #111827;
+              }
+              .combo-title {
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+                color: #92400e;
+                margin-bottom: 3px;
+              }
+              .combo-line {
+                line-height: 1.4;
               }
               .obs-box {
                 background: #fffbeb;
-                border: 1px solid #fde68a;
-                border-left: 4px solid #f59e0b;
-                padding: 9px 12px;
+                border: 1.5px solid #f59e0b;
+                border-left: 5px solid #d97706;
+                padding: 10px 14px;
                 border-radius: 6px;
                 margin-bottom: 14px;
-                font-size: 12px;
+                font-size: 13px;
+                color: #111827;
               }
               .obs-box strong {
-                font-size: 10.5px;
+                font-size: 11px;
                 text-transform: uppercase;
                 color: #92400e;
                 display: block;
-                margin-bottom: 2px;
+                margin-bottom: 3px;
               }
               .totals-box {
                 display: flex;
@@ -2793,10 +2888,22 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 <strong>Modalidade</strong>
                 <span>${order.deliveryType === 'pickup' ? 'Retirada no Estabelecimento' : 'Entrega (Delivery)'}</span>
               </div>
+              ${(order.pickupDate || order.pickupTime) ? `
+              <div class="client-item">
+                <strong>Data / Horário Agendado</strong>
+                <span>${escapeHtml(order.pickupDate || '')}${order.pickupTime ? ` às ${escapeHtml(order.pickupTime)}` : ''}</span>
+              </div>
+              ` : ''}
+              ${(order.isB2B || order.isPJ) ? `
+              <div class="client-item">
+                <strong>Empresa / Responsável</strong>
+                <span>${escapeHtml(order.b2bCompanyName || order.customerName)}${order.b2bManagerName ? ` (${escapeHtml(order.b2bManagerName)})` : ''}</span>
+              </div>
+              ` : ''}
               ${order.paymentMethod ? `
               <div class="client-item">
                 <strong>Forma de Pagamento</strong>
-                <span>${order.paymentMethod}</span>
+                <span>${escapeHtml(order.paymentMethod)}</span>
               </div>
               ` : ''}
             </div>
@@ -2815,10 +2922,10 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
               </tbody>
             </table>
 
-            ${order.observation ? `
+            ${order.observation && order.observation.trim() ? `
             <div class="obs-box">
-              <strong>Observações do Pedido:</strong>
-              <div>${order.observation}</div>
+              <strong>Observações do Pedido (Produção / Entrega):</strong>
+              <div>${formatMultiline(order.observation)}</div>
             </div>
             ` : ''}
 
@@ -2866,36 +2973,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const totalFont = is80 ? '15pt' : '14pt';
 
     let itemsHtml = order.items.map(item => {
-      let optionsHtml = '';
-      if (item.cakeOptions && (item.cakeOptions.size || item.cakeOptions.dough || item.cakeOptions.fillings)) {
-        optionsHtml = `
-          <div class="item-sub">
-            ${item.cakeOptions.size ? `<div>TAMANHO: ${item.cakeOptions.size}</div>` : ''}
-            ${item.cakeOptions.dough ? `<div>MASSA: ${item.cakeOptions.dough}</div>` : ''}
-            ${item.cakeOptions.fillings && item.cakeOptions.fillings.length > 0 ? `<div>RECHEIOS: ${item.cakeOptions.fillings.join(', ')}</div>` : ''}
-            ${item.cakeOptions.topping ? `<div>COBERTURA: ${item.cakeOptions.topping}</div>` : ''}
-            ${item.cakeOptions.topper ? `<div>TOPPER: ${item.cakeOptions.topper}</div>` : ''}
-          </div>
-        `;
-      } else if (item.sandwichOptions && item.sandwichOptions.fillings && item.sandwichOptions.fillings.length > 0) {
-        optionsHtml = `
-          <div class="item-sub">
-            <div>RECHEIOS: ${item.sandwichOptions.fillings.join(', ')}</div>
-          </div>
-        `;
-      } else if (item.mealOptions) {
-        optionsHtml = `
-          <div class="item-sub">
-            ${item.mealOptions.removals.length > 0 ? `<div>REMOVER: ${item.mealOptions.removals.join(', ')}</div>` : ''}
-            ${item.mealOptions.sides.length > 0 ? `<div>ACOMPANHAMENTOS: ${item.mealOptions.sides.map(s => s.name).join(', ')}</div>` : ''}
-          </div>
-        `;
-      }
+      const optionsHtml = buildItemDetailsHtml(item, true);
 
       return `
         <div class="item-row">
           <div class="item-main">
-            <span class="item-name">${item.quantity}x ${item.title.toUpperCase()}${item.selectedSize ? ` (${item.selectedSize.name.toUpperCase()})` : ''}</span>
+            <span class="item-name">${item.quantity}x ${getItemDisplayTitle(item, true)}</span>
             <span class="item-price">${currencySymbol} ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
           </div>
           ${optionsHtml}
@@ -2903,10 +2986,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       `;
     }).join('');
 
+    const deliveryAddressText = order.b2bAddress || order.address || (order.deliveryType === 'pickup' ? 'RETIRADA NO ESTABELECIMENTO' : 'NÃO INFORMADO');
+
     printWithIframe(`
       <html>
         <head>
-          <title>Comanda - ${order.customerName}</title>
+          <title>Comanda - ${escapeHtml(order.customerName)}</title>
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
@@ -2932,11 +3017,16 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             .section { margin-bottom: 6px; word-wrap: break-word; }
             .label { font-weight: 700; font-size: ${bodyFont}; text-transform: uppercase; color: #000; }
             .value { font-size: ${bodyFont}; font-weight: 500; color: #000; }
-            .item-row { border-bottom: 1px dashed #000; padding: 5px 0; font-size: ${bodyFont}; }
+            .item-row { border-bottom: 1px dashed #000; padding: 6px 0; font-size: ${bodyFont}; }
             .item-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; font-weight: 700; }
             .item-name { flex: 1; min-width: 0; word-wrap: break-word; }
             .item-price { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
-            .item-sub { font-size: ${subFont}; font-weight: 500; color: #000; padding-left: 6px; margin-top: 3px; line-height: 1.38; }
+            .item-sub { font-size: ${subFont}; font-weight: 500; color: #000; padding-left: 6px; margin-top: 3px; line-height: 1.38; border-left: 2px solid #000; }
+            .combo-box { margin-top: 4px; padding: 3px 0 3px 6px; border-left: 2px solid #000; font-size: ${subFont}; color: #000; line-height: 1.38; }
+            .combo-title { font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+            .combo-line { margin-bottom: 2px; word-wrap: break-word; }
+            .obs-highlight { border: 2px solid #000; padding: 5px 6px; margin: 7px 0; word-wrap: break-word; }
+            .obs-highlight .label { display: block; margin-bottom: 2px; border-bottom: 1px dashed #000; padding-bottom: 2px; }
             .divider { border-top: 1px dashed #000; margin: 6px 0; }
             .double-divider { border-top: 2px solid #000; margin: 6px 0; }
             .meta-info { font-size: ${metaFont}; font-weight: 500; color: #000; line-height: 1.4; }
@@ -2947,36 +3037,62 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         </head>
         <body>
           <div class="header">
-            <h2>${brand}</h2>
-            <p>${dateStr}</p>
+            <h2>${escapeHtml(brand)}</h2>
+            <p>${escapeHtml(dateStr)}</p>
           </div>
           
           <div class="section">
             <span class="label">CLIENTE:</span>
-            <span class="value">${order.customerName.toUpperCase()}</span>
+            <span class="value">${escapeHtml(order.customerName.toUpperCase())}</span>
           </div>
+
+          ${(order.isB2B || order.isPJ) && order.b2bCompanyName ? `
+          <div class="section">
+            <span class="label">EMPRESA:</span>
+            <span class="value">${escapeHtml(order.b2bCompanyName.toUpperCase())}</span>
+          </div>
+          ` : ''}
+
+          ${(order.isB2B || order.isPJ) && order.b2bManagerName ? `
+          <div class="section">
+            <span class="label">RESPONSÁVEL:</span>
+            <span class="value">${escapeHtml(order.b2bManagerName.toUpperCase())}</span>
+          </div>
+          ` : ''}
           
           <div class="section">
             <span class="label">TELEFONE:</span>
-            <span class="value">${order.phone}</span>
+            <span class="value">${escapeHtml(order.phone || '-')}</span>
           </div>
           
           ${order.email ? `
           <div class="section">
             <span class="label">EMAIL:</span>
-            <span class="value">${order.email}</span>
+            <span class="value">${escapeHtml(order.email)}</span>
+          </div>
+          ` : ''}
+
+          <div class="section">
+            <span class="label">MODALIDADE:</span>
+            <span class="value">${order.deliveryType === 'pickup' ? 'RETIRADA NO LOCAL' : 'ENTREGA (DELIVERY)'}</span>
+          </div>
+
+          ${(order.pickupDate || order.pickupTime) ? `
+          <div class="section">
+            <span class="label">AGENDADO:</span>
+            <span class="value">${escapeHtml(order.pickupDate || '')}${order.pickupTime ? ` ÀS ${escapeHtml(order.pickupTime)}` : ''}</span>
           </div>
           ` : ''}
           
           <div class="section">
             <span class="label">ENDEREÇO:</span>
-            <span class="value">${order.address.toUpperCase()}</span>
+            <span class="value">${escapeHtml(deliveryAddressText.toUpperCase())}</span>
           </div>
           
           ${order.birthday ? `
           <div class="section">
             <span class="label">ANIVERSÁRIO:</span>
-            <span class="value">${order.birthday}</span>
+            <span class="value">${escapeHtml(order.birthday)}</span>
           </div>
           ` : ''}
           
@@ -2990,22 +3106,21 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           ${order.paymentMethod ? `
           <div class="section">
             <span class="label">PAGAMENTO:</span>
-            <span class="value">${order.paymentMethod.toUpperCase()}</span>
+            <span class="value">${escapeHtml(order.paymentMethod.toUpperCase())}</span>
           </div>
           ` : ''}
 
-          ${order.observation ? `
-          <div class="divider"></div>
-          <div class="section">
-            <div class="label">OBSERVAÇÃO:</div>
-            <div class="value">${order.observation.toUpperCase()}</div>
+          ${order.observation && order.observation.trim() ? `
+          <div class="obs-highlight">
+            <div class="label">OBSERVAÇÃO DO PEDIDO:</div>
+            <div class="value" style="font-weight: 700;">${formatMultiline(order.observation.toUpperCase())}</div>
           </div>
           ` : ''}
           
           <div class="divider"></div>
           <div class="section meta-info">
-            ID: ${order.id}<br/>
-            DATA DO PEDIDO: ${dateStr}
+            ID: ${escapeHtml(order.id)}<br/>
+            DATA DO PEDIDO: ${escapeHtml(dateStr)}
           </div>
           
           ${(order.deliveryFee !== undefined && order.deliveryFee > 0) ? `
@@ -3018,6 +3133,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <div>RETIRADA NO ESTABELECIMENTO: GRÁTIS</div>
           </div>
           ` : ''}
+
+          ${(order.taxAmount !== undefined && order.taxAmount > 0) ? `
+          <div class="total-section">
+            <div>TAXAS (${order.taxRate || 0}%): + ${currencySymbol} ${order.taxAmount.toFixed(2).replace('.', ',')}</div>
+          </div>
+          ` : ''}
           
           <div class="total">
             TOTAL: ${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}
@@ -3025,7 +3146,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
           <div class="footer-receipt">
             Obrigado pela preferência!<br/>
-            ${brand}
+            ${escapeHtml(brand)}
           </div>
         </body>
       </html>
@@ -8015,7 +8136,19 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                           {order.items.map((item, idx) => (
                             <div key={idx} className="flex justify-between items-start border-b border-black/5 last:border-0 pb-2 last:pb-0">
                               <div className="space-y-1">
-                                <div className="font-bold text-black">{item.quantity}x {item.title}{item.selectedSize ? ` (${item.selectedSize.name})` : ''}</div>
+                                <div className="font-bold text-black">{item.quantity}x {item.title}{item.selectedSize && !item.title.includes(`(${item.selectedSize.name})`) ? ` (${item.selectedSize.name})` : ''}</div>
+                                {item.comboSelections && item.comboSelections.length > 0 && (
+                                  <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-300/80 text-xs space-y-1 mt-1">
+                                    <span className="font-bold text-amber-950 uppercase tracking-wider text-[10.5px] block">
+                                      Itens Escolhidos no Combo ({item.comboSelections.reduce((acc, s) => acc + (s.quantity ?? s.count ?? 1), 0)} un):
+                                    </span>
+                                    {item.comboSelections.map((sel, sIdx) => (
+                                      <div key={sIdx} className="text-neutral-900 font-medium">
+                                        • {(sel.quantity ?? sel.count ?? 1)}x {sel.dishTitle}
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 {item.cakeOptions && (
                                   <div className="text-xs text-gray-700 space-y-0.5 font-medium">
                                     {item.cakeOptions.size && <div><span className="font-bold">Tamanho:</span> {item.cakeOptions.size}</div>}
@@ -8025,6 +8158,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                     )}
                                     {item.cakeOptions.topping && <div><span className="font-bold">Cobertura:</span> {item.cakeOptions.topping}</div>}
                                     {item.cakeOptions.topper && <div><span className="font-bold">Topper:</span> {item.cakeOptions.topper}</div>}
+                                    {item.cakeOptions.styleNumber && <div><span className="font-bold">Referência Foto:</span> Nº {item.cakeOptions.styleNumber}</div>}
                                   </div>
                                 )}
                                 {item.sandwichOptions && item.sandwichOptions.fillings && item.sandwichOptions.fillings.length > 0 && (
@@ -8040,6 +8174,11 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                     {item.mealOptions.sides.length > 0 && (
                                       <div><span className="font-bold">Acompanhamentos:</span> {item.mealOptions.sides.map(s => s.name).join(', ')}</div>
                                     )}
+                                  </div>
+                                )}
+                                {item.observation && (
+                                  <div className="text-xs text-amber-900 font-semibold italic mt-0.5">
+                                    Obs do item: {item.observation}
                                   </div>
                                 )}
                               </div>
@@ -9120,6 +9259,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                 {item.mealOptions.sides && item.mealOptions.sides.length > 0 && (
                                   <p>Extras: {item.mealOptions.sides.map(s => s.name).join(', ')}</p>
                                 )}
+                              </div>
+                            )}
+                            {item.comboSelections && item.comboSelections.length > 0 && (
+                              <div className="text-xs text-amber-950 bg-amber-50/80 border border-amber-200 rounded-lg p-2 space-y-0.5 mt-1">
+                                <p className="font-bold uppercase text-[10px]">Itens do Combo:</p>
+                                {item.comboSelections.map((sel, sIdx) => (
+                                  <p key={sIdx}>• {(sel.quantity ?? sel.count ?? 1)}x {sel.dishTitle}</p>
+                                ))}
                               </div>
                             )}
                             {item.observation && (
