@@ -2586,13 +2586,19 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         const totalUnits = item.comboSelections.reduce((acc, s) => acc + (s.quantity ?? s.count ?? 1), 0);
         const lines = item.comboSelections.map(sel => {
           const selQty = sel.quantity ?? sel.count ?? 1;
+          const rawTitle =
+            sel.dishTitle ||
+            (sel as any).title ||
+            (sel as any).name ||
+            products.find(p => p.id === sel.dishId)?.title ||
+            'Item do Combo';
           const totalProduction = selQty * (item.quantity || 1);
           const qtySuffix = item.quantity > 1 ? ` (Total produção: ${totalProduction}x)` : '';
-          return `<div class="combo-line">• <strong>${selQty}x</strong> ${escapeHtml(isThermal ? sel.dishTitle.toUpperCase() : sel.dishTitle)}${escapeHtml(qtySuffix)}</div>`;
+          return `<div class="combo-line">• <strong>${selQty}x</strong> ${escapeHtml(isThermal ? rawTitle.toUpperCase() : rawTitle)}${escapeHtml(qtySuffix)}</div>`;
         }).join('');
         blocks.push(`
           <div class="combo-box">
-            <div class="combo-title">ITENS ESCOLHIDOS NO COMBO (${totalUnits} UN${item.quantity > 1 ? ` × ${item.quantity}` : ''}):</div>
+            <div class="combo-title">SABORES ESCOLHIDOS NO COMBO (${totalUnits} UN${item.quantity > 1 ? ` × ${item.quantity}` : ''}):</div>
             ${lines}
           </div>
         `);
@@ -2906,6 +2912,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 <span>${escapeHtml(order.paymentMethod)}</span>
               </div>
               ` : ''}
+              <div class="client-item">
+                <strong>Status do Pagamento</strong>
+                <span>${order.paymentStatus === 'full' ? 'Pago Integralmente' : order.paymentStatus === 'half' ? 'Sinal 50% Pago' : 'Não Recebido / Pendente'}</span>
+              </div>
+              <div class="client-item">
+                <strong>Status da Entrega</strong>
+                <span>${order.deliveryStatus === 'delivered' ? 'Entregue' : 'A Entregar'}${order.isValidatedForProduction ? ' • Produção Validada' : ''}</span>
+              </div>
             </div>
 
             <table class="items-table">
@@ -3018,8 +3032,8 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             .label { font-weight: 700; font-size: ${bodyFont}; text-transform: uppercase; color: #000; }
             .value { font-size: ${bodyFont}; font-weight: 500; color: #000; }
             .item-row { border-bottom: 1px dashed #000; padding: 6px 0; font-size: ${bodyFont}; }
-            .item-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; font-weight: 700; }
-            .item-name { flex: 1; min-width: 0; word-wrap: break-word; }
+            .item-main { display: flex; justify-content: space-between; align-items: flex-start; gap: 4px; font-weight: 700; }
+            .item-name { flex: 1; min-width: 0; overflow-wrap: break-word; word-break: normal; }
             .item-price { white-space: nowrap; flex-shrink: 0; font-weight: 700; }
             .item-sub { font-size: ${subFont}; font-weight: 500; color: #000; padding-left: 6px; margin-top: 3px; line-height: 1.38; border-left: 2px solid #000; }
             .combo-box { margin-top: 4px; padding: 3px 0 3px 6px; border-left: 2px solid #000; font-size: ${subFont}; color: #000; line-height: 1.38; }
@@ -3110,6 +3124,16 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           </div>
           ` : ''}
 
+          <div class="section">
+            <span class="label">STATUS PAGAMENTO:</span>
+            <span class="value">${order.paymentStatus === 'full' ? 'PAGO INTEGRALMENTE' : order.paymentStatus === 'half' ? 'SINAL 50% PAGO' : 'NÃO RECEBIDO / PENDENTE'}</span>
+          </div>
+
+          <div class="section">
+            <span class="label">STATUS ENTREGA:</span>
+            <span class="value">${order.deliveryStatus === 'delivered' ? 'ENTREGUE' : 'A ENTREGAR'}${order.isValidatedForProduction ? ' • VALIDADO' : ''}</span>
+          </div>
+
           ${order.observation && order.observation.trim() ? `
           <div class="obs-highlight">
             <div class="label">OBSERVAÇÃO DO PEDIDO:</div>
@@ -3148,6 +3172,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             Obrigado pela preferência!<br/>
             ${escapeHtml(brand)}
           </div>
+          <div style="height: 10mm; font-size: 1pt; line-height: 10mm;">&nbsp;</div>
         </body>
       </html>
     `);
