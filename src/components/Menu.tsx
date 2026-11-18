@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { db } from '../firebase';
-import { collection, onSnapshot, addDoc, updateDoc, serverTimestamp, doc, query, orderBy } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, serverTimestamp, doc, query, orderBy, waitForPendingWrites } from 'firebase/firestore';
 import { Product, Order, Settings, Category, CartItem, Side, ProductSize, ImageGallery } from '../types';
 import { Plus, Minus, ShoppingBag, X, MessageCircle, MessageSquare, Check, Calendar, Building2, User, Phone, MapPin, RefreshCw, ChevronDown, Truck, Navigation, Loader2, Lock, ArrowLeft, Info, ArrowRight, Layers, Search, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -216,14 +216,35 @@ const translateSettingsToEnglish = (s: Settings): Settings => {
   };
 };
 
-const cleanFirestoreObject = <T extends Record<string, any>>(obj: T): T => {
-  const result: any = {};
-  for (const [key, value] of Object.entries(obj)) {
-    if (value !== undefined) {
-      result[key] = value;
-    }
+const cleanFirestoreValue = (value: any): any => {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : 0;
   }
-  return result;
+  if (Array.isArray(value)) {
+    return value
+      .map(item => cleanFirestoreValue(item))
+      .filter(item => item !== undefined);
+  }
+  if (value !== null && typeof value === 'object' && !(value instanceof Date)) {
+    // Preserve Firestore FieldValue / sentinel objects (like serverTimestamp())
+    if (typeof (value as any)._methodName === 'string' || typeof (value as any).toDate === 'function') {
+      return value;
+    }
+    const result: any = {};
+    for (const [k, v] of Object.entries(value)) {
+      const cleaned = cleanFirestoreValue(v);
+      if (cleaned !== undefined) {
+        result[k] = cleaned;
+      }
+    }
+    return result;
+  }
+  return value;
+};
+
+const cleanFirestoreObject = <T extends Record<string, any>>(obj: T): T => {
+  return cleanFirestoreValue(obj) as T;
 };
 
 export const hasNutritionalData = (prod?: Product | null): boolean => {
@@ -422,6 +443,7 @@ export default function Menu({
   const [selectedProductForDetails, setSelectedProductForDetails] = useState<Product | null>(null);
   const [b2bSuccessUrls, setB2bSuccessUrls] = useState<{ whatsapp: string } | null>(null);
   const [standardSuccessUrls, setStandardSuccessUrls] = useState<{ whatsapp: string } | null>(null);
+  const [savedOrderId, setSavedOrderId] = useState<string | null>(null);
   const [galleries, setGalleries] = useState<ImageGallery[]>([]);
   const [selectedStyleNumber, setSelectedStyleNumber] = useState<number | null>(null);
   const [customItemQuantity, setCustomItemQuantity] = useState<number>(1);
@@ -1395,53 +1417,74 @@ export default function Menu({
       return;
     }
 
+    const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
+    if (!cleanPhone) {
+      toast.error(settings.language === 'en'
+        ? 'Error: Representative contact number is not properly configured in the administration panel.'
+        : 'Erro: Número para contato não configurado corretamente no painel administrativo.'
+      );
+      return;
+    }
+
+    const missingProductItem = cart.find(item => !products.some(p => p.id === item.productId));
+    if (missingProductItem) {
+      toast.error('Um ou mais itens do seu carrinho foram atualizados ou removidos do cardápio. Revise sua sacola antes de finalizar.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const hasConsultItems = cart.some(item => {
         const p = products.find(prod => prod.id === item.productId);
         return p?.priceType === 'consult' || p?.isCustomCake === true;
       });
-      
+
       const orderItems = cart.map(item => {
         const product = products.find(p => p.id === item.productId)!;
-        const basePrice = item.selectedSize ? item.selectedSize.price : ((product.price && product.price > 0) ? product.price : (product.oldPrice || 0));
+        const basePriceRaw = item.selectedSize ? item.selectedSize.price : ((product.price && product.price > 0) ? product.price : (product.oldPrice || 0));
+        const basePrice = Number.isFinite(Number(basePriceRaw)) ? Number(basePriceRaw) : 0;
         let itemPrice = basePrice;
         if (item.mealOptions?.sides) {
-          itemPrice += item.mealOptions.sides.reduce((sum, s) => sum + s.price, 0);
+          itemPrice += item.mealOptions.sides.reduce((sum, s) => sum + (Number.isFinite(Number(s.price)) ? Number(s.price) : 0), 0);
         }
+        const safeItemPrice = Number.isFinite(itemPrice) ? itemPrice : 0;
+        const safeQty = Number.isFinite(Number(item.quantity)) && Number(item.quantity) > 0 ? Number(item.quantity) : 1;
 
         const cleanedMealOptions = item.mealOptions ? {
           removals: item.mealOptions.removals || [],
           sides: (item.mealOptions.sides || []).map(side => ({
             id: side.id,
             name: side.name,
-            price: side.price,
+            price: Number.isFinite(Number(side.price)) ? Number(side.price) : 0,
             type: side.type || 'side'
           }))
         } : undefined;
 
-        return {
+        return cleanFirestoreObject({
           title: item.selectedSize ? `${product.title} (${item.selectedSize.name})` : product.title,
-          quantity: item.quantity,
-          price: itemPrice,
+          quantity: safeQty,
+          price: safeItemPrice,
           priceType: product.priceType || 'fixed',
           mealOptions: cleanedMealOptions,
           selectedSize: item.selectedSize || undefined,
           cakeOptions: item.cakeOptions || undefined,
           sandwichOptions: item.sandwichOptions || undefined,
           comboSelections: item.comboSelections || undefined
-        };
+        });
       });
 
-      const deliveryFeeVal = (settings.deliveryEnabled && deliveryType === 'delivery')
+      const deliveryFeeValRaw = (settings.deliveryEnabled && deliveryType === 'delivery')
         ? effectiveDeliveryFee
         : 0;
-      const finalTotalWithDelivery = cartTotal + deliveryFeeVal;
+      const deliveryFeeVal = Number.isFinite(Number(deliveryFeeValRaw)) ? Number(deliveryFeeValRaw) : 0;
+      const safeCartTotal = Number.isFinite(Number(cartTotal)) ? Number(cartTotal) : 0;
+      const finalTotalWithDelivery = Number.isFinite(safeCartTotal + deliveryFeeVal) ? (safeCartTotal + deliveryFeeVal) : safeCartTotal;
 
       const fullAddress = deliveryType === 'pickup'
         ? (settings.deliveryOriginAddress ? `Retirada na Loja (${settings.deliveryOriginAddress})` : 'Retirada no Estabelecimento')
         : `${formData.street}, ${formData.number || 'S/N'}${formData.bairro ? ` - Bairro ${formData.bairro}` : ''} - ${formData.city} / ${formData.state}${formData.zipCode ? ` (CEP: ${formData.zipCode})` : ''}`;
 
+      const now = new Date();
       const orderData: Omit<Order, 'id'> = cleanFirestoreObject({
         customerName: formData.nome,
         phone: formData.telefone,
@@ -1454,22 +1497,33 @@ export default function Menu({
         state: formData.state || '',
         deliveryType: settings.deliveryEnabled ? deliveryType : 'pickup',
         deliveryFee: (settings.deliveryEnabled && deliveryType === 'delivery') ? deliveryFeeVal : 0,
-        deliveryDistanceKm: (settings.deliveryEnabled && deliveryType === 'delivery') ? (deliveryCalculation?.distanceKm || 0) : 0,
+        deliveryDistanceKm: (settings.deliveryEnabled && deliveryType === 'delivery') ? (Number.isFinite(Number(deliveryCalculation?.distanceKm)) ? Number(deliveryCalculation?.distanceKm) : 0) : 0,
         birthday: formData.aniversario || '',
         observation: formData.observacao || '',
         email: formData.email || '',
         items: orderItems,
         total: finalTotalWithDelivery,
-        subtotal: cartTotal,
+        subtotal: safeCartTotal,
         taxRate: 0,
         taxAmount: 0,
         createdAt: serverTimestamp(),
+        createdAtIso: now.toISOString(),
         orderLanguage: settings.language || 'pt',
         paymentMethod: paymentMethod
       });
 
       console.log('Finalizando pedido...', orderData);
-      await addDoc(collection(db, 'pedidos'), orderData);
+      const saveWithTimeout = async () => {
+        const docRef = await addDoc(collection(db, 'pedidos'), orderData);
+        await waitForPendingWrites(db);
+        return docRef;
+      };
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Tempo esgotado ao confirmar gravação do pedido no sistema.')), 20000)
+      );
+      const savedDocRef = await Promise.race([saveWithTimeout(), timeoutPromise]);
+      const shortOrderCode = savedDocRef.id.slice(-6).toUpperCase();
+      setSavedOrderId(savedDocRef.id);
 
       // Decrementar estoque de produtos e componentes de combos
       cart.forEach(item => {
@@ -1489,12 +1543,12 @@ export default function Menu({
           });
         }
       });
-      
-      const now = new Date();
+
       const timeStr = now.toLocaleTimeString(settings.language === 'en' ? 'en-US' : 'pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
       const dateStr = now.toLocaleDateString(settings.language === 'en' ? 'en-US' : 'pt-BR', { timeZone: 'America/Sao_Paulo' });
 
       let message = `*${t.whatsappOrder} - ${settings.brandName || settings.slug}*\n`;
+      message += `*Código do Pedido:* #${shortOrderCode}\n`;
       message += `*${t.whatsappDate}:* ${dateStr} ${t.whatsappAt} ${timeStr}\n\n`;
       
       message += `*--- ${t.whatsappData} ---*\n`;
@@ -1576,9 +1630,9 @@ export default function Menu({
       });
 
       if (settings.deliveryEnabled && deliveryType === 'delivery') {
-        message += `\n*Subtotal dos Itens:* ${currencySymbol}${cartTotal.toFixed(2)}\n`;
+        message += `\n*Subtotal dos Itens:* ${currencySymbol}${safeCartTotal.toFixed(2)}\n`;
         if (isFreeDeliveryQualified) {
-          message += `*Taxa de Entrega:* GRÁTIS (Pedido acima de ${currencySymbol}${settings.deliveryFreeAbove?.toFixed(2)})\n`;
+          message += `*Taxa de Entrega:* GRÁTIS (Pedido acima de ${currencySymbol}${Number(settings.deliveryFreeAbove || 0).toFixed(2)})\n`;
         } else if (settings.deliveryCities && settings.deliveryCities.length > 0) {
           const selectedCity = settings.deliveryCities.find(c => c.id === selectedDeliveryCityId);
           if (selectedDeliveryCityId === 'other') {
@@ -1590,7 +1644,7 @@ export default function Menu({
           message += `*Taxa de Entrega (${deliveryCalculation?.distanceKm ? `${deliveryCalculation.distanceKm} km` : 'Frete'}):* ${deliveryCalculation?.isFree ? 'GRÁTIS' : `${currencySymbol}${deliveryFeeVal.toFixed(2)}`}\n`;
         }
       } else if (settings.deliveryEnabled && deliveryType === 'pickup') {
-        message += `\n*Subtotal dos Itens:* ${currencySymbol}${cartTotal.toFixed(2)}\n`;
+        message += `\n*Subtotal dos Itens:* ${currencySymbol}${safeCartTotal.toFixed(2)}\n`;
         message += `*Retirada no Estabelecimento:* GRÁTIS\n`;
       }
 
@@ -1603,16 +1657,6 @@ export default function Menu({
       message += `\n${settings.whatsappClosingMessage || 'Obrigada pelo pedido, aguarde que entraremos em contato para confirmação!'}`;
 
       const encodedMessage = encodeURIComponent(message);
-      const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
-      
-      if (!cleanPhone) {
-        toast.error(settings.language === 'en' 
-          ? 'Error: Representative contact number is not properly configured in the administration panel.' 
-          : 'Erro: Número para contato não configurado corretamente no painel administrativo.'
-        );
-        return;
-      }
-
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const whatsappUrl = isIOS 
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`
@@ -1621,10 +1665,13 @@ export default function Menu({
       setStandardSuccessUrls({ whatsapp: whatsappUrl });
       setCheckoutStep('channels');
       setHasRedirected(false);
-      toast.success(settings.language === 'en' ? 'Order saved! Select your dispatch method below.' : 'Pedido salvo! Selecione a forma de envio abaixo.');
+      toast.success(settings.language === 'en' ? 'Order saved! Select your dispatch method below.' : `Pedido #${shortOrderCode} salvo no painel! Envie abaixo pelo WhatsApp.`);
     } catch (error) {
       console.error("Erro ao salvar pedido:", error);
-      toast.error(settings.language === 'en' ? 'Error finalizing order. Please try again.' : 'Erro ao finalizar pedido. Por favor, tente novamente.');
+      toast.error(settings.language === 'en'
+        ? 'Could not register your order on the server. Check your internet and try again.'
+        : 'Não foi possível registrar seu pedido no sistema. Verifique sua conexão e tente novamente.'
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -1635,6 +1682,7 @@ export default function Menu({
     setIsModalOpen(false);
     setCheckoutStep('summary');
     setStandardSuccessUrls(null);
+    setSavedOrderId(null);
     setFormData({ 
       nome: '', 
       telefone: '', 
@@ -1658,11 +1706,13 @@ export default function Menu({
     setIsModalOpen(false);
     setCheckoutStep('summary');
     setB2bSuccessUrls(null);
+    setSavedOrderId(null);
   };
 
-   const handleFinalizarB2b = async (e: React.FormEvent) => {
+  const handleFinalizarB2b = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+    if (isSubmitting) return;
+
     if (cart.length === 0) {
       toast.error(settings.language === 'en' ? 'Your cart is empty!' : 'Seu carrinho está vazio!');
       return;
@@ -1678,6 +1728,20 @@ export default function Menu({
       toast.error('Please fill in all required fields!');
       return;
     }
+
+    const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
+    if (!cleanPhone) {
+      toast.error('Representative contact number is not fully configured in the Admin panel.');
+      return;
+    }
+
+    const missingProductItem = cart.find(item => !products.some(p => p.id === item.productId));
+    if (missingProductItem) {
+      toast.error('Um ou mais itens do seu carrinho não estão mais disponíveis. Revise sua sacola.');
+      return;
+    }
+
+    setIsSubmitting(true);
 
     const orderItems = cart.map(item => {
       const product = products.find(p => p.id === item.productId)!;
@@ -1705,7 +1769,8 @@ export default function Menu({
       };
     });
 
-    const b2bOrderObj = {
+    const now = new Date();
+    const b2bOrderObj = cleanFirestoreObject({
       customerName: b2bName,
       phone: b2bPhone,
       address: b2bAddress,
@@ -1721,6 +1786,7 @@ export default function Menu({
       items: orderItems,
       total: 0,
       createdAt: serverTimestamp(),
+      createdAtIso: now.toISOString(),
       orderLanguage: 'en',
       isB2B: true,
       isPJ: true,
@@ -1730,12 +1796,22 @@ export default function Menu({
       b2bAddress: b2bAddress,
       b2bZipCode: b2bZipCode,
       b2bCity: b2bCity
-    };
+    });
 
     try {
       console.log('Sending corporate B2B order request...', b2bOrderObj);
-      await addDoc(collection(db, 'pedidos'), b2bOrderObj);
-      
+      const saveB2bWithTimeout = async () => {
+        const docRef = await addDoc(collection(db, 'pedidos'), b2bOrderObj);
+        await waitForPendingWrites(db);
+        return docRef;
+      };
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Timeout saving B2B order')), 20000)
+      );
+      const savedDocRef = await Promise.race([saveB2bWithTimeout(), timeoutPromise]);
+      const shortOrderCode = savedDocRef.id.slice(-6).toUpperCase();
+      setSavedOrderId(savedDocRef.id);
+
       // Persist client details in localStorage so it autofills on subsequent visits!
       localStorage.setItem('b2b_profile_save', JSON.stringify({
         name: b2bName,
@@ -1747,11 +1823,11 @@ export default function Menu({
       }));
       setIsReturningB2b(true);
 
-      const now = new Date();
       const timeStr = now.toLocaleTimeString('en-US', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' });
       const dateStr = now.toLocaleDateString('en-US', { timeZone: 'America/Sao_Paulo' });
 
       let message = `*Corporate Order Request - ${settings.brandName || settings.slug}*\n`;
+      message += `*Order Code:* #${shortOrderCode}\n`;
       message += `*Date:* ${dateStr} at ${timeStr}\n\n`;
       message += `*--- COMPANY DETAILS ---*\n`;
       message += `*Company Name:* ${b2bName}\n`;
@@ -1760,7 +1836,7 @@ export default function Menu({
       message += `*Delivery Address:* ${b2bAddress}\n`;
       message += `*Zip Code:* ${b2bZipCode}\n`;
       message += `*City:* ${b2bCity}\n`;
-      message += `*Frequency:* ${b2bFrequency === 'weekly' ? 'Weekly Contract (Recurring)' : 'One-Time Order (Spot)'}\n`;
+      message += `*Frequency:* ${b2bFrequency === 'weekly' ? 'Weekly Recurring Plan' : 'One-Time Order (Spot)'}\n`;
       message += `*Target Start Date:* ${b2bOrderObj.pickupDate}\n`;
       if (b2bObservation) {
         message += `*Notes:* ${b2bObservation}\n`;
@@ -1770,17 +1846,10 @@ export default function Menu({
         message += `• ${item.quantity}x ${item.title}\n`;
       });
       message += `\n${settings.whatsappClosingMessage || 'Obrigada pelo pedido, aguarde que entraremos em contato para confirmação!'}\n`;
-      
+
       const encodedMessage = encodeURIComponent(message);
-      const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
-
-      if (!cleanPhone) {
-        toast.error('Representative contact number is not fully configured in the Admin panel.');
-        return;
-      }
-
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-      const whatsappUrl = isIOS 
+      const whatsappUrl = isIOS
         ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodedMessage}`
         : `https://wa.me/${cleanPhone}?text=${encodedMessage}`;
 
@@ -1788,10 +1857,12 @@ export default function Menu({
       setB2bSuccessUrls({ whatsapp: whatsappUrl });
       setCheckoutStep('b2b_channels');
       setHasRedirected(false);
-      toast.success('Corporate order saved! Choose how you would like to submit below.');
+      toast.success(`Corporate order #${shortOrderCode} saved! Choose how you would like to submit below.`);
     } catch (error) {
       console.error('Error saving B2B corporate order details:', error);
-      toast.error('Failed to submit corporate request. Please verify and try again.');
+      toast.error('Failed to submit corporate request. Please verify your internet connection and try again.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -2623,8 +2694,13 @@ export default function Menu({
                       <h3 className="text-xl font-serif font-black uppercase tracking-wide text-black">
                         PEDIDO SALVO!
                       </h3>
+                      {savedOrderId && (
+                        <div className="inline-block px-3 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-800 text-xs font-mono font-black">
+                          Código: #{savedOrderId.slice(-6).toUpperCase()}
+                        </div>
+                      )}
                       <p className="text-xs font-semibold text-black/60 max-w-sm mx-auto">
-                        Os detalhes do seu pedido foram registrados com sucesso.
+                        Os detalhes do seu pedido foram registrados com sucesso no painel.
                       </p>
                     </div>
 
@@ -2728,8 +2804,13 @@ export default function Menu({
                       <h3 className="text-xl font-serif font-black uppercase tracking-wide text-black">
                         PEDIDO SALVO!
                       </h3>
+                      {savedOrderId && (
+                        <div className="inline-block px-3 py-0.5 rounded-full bg-green-50 border border-green-200 text-green-800 text-xs font-mono font-black">
+                          Código: #{savedOrderId.slice(-6).toUpperCase()}
+                        </div>
+                      )}
                       <p className="text-xs font-semibold text-black/60 max-w-sm mx-auto">
-                        Os detalhes do seu pedido corporativo foram registrados com sucesso.
+                        Os detalhes do seu pedido corporativo foram registrados com sucesso no painel.
                       </p>
                     </div>
 
@@ -5890,7 +5971,9 @@ export default function Menu({
                   <div className="w-full">
                     <button
                       type="button"
-                      onClick={() => {
+                      disabled={isSubmitting}
+                      onClick={async () => {
+                        if (isSubmitting) return;
                         // Submit via WhatsApp
                         if (!b2bName.trim() || !b2bResponsibleName.trim() || !b2bPhone.trim() || !b2bAddress.trim() || !b2bDate) {
                            toast.error('Please complete all fields with an asterisk (*).');
@@ -5900,7 +5983,12 @@ export default function Menu({
                            toast.error('Select at least one package size quantity.');
                            return;
                         }
-                        
+                        const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
+                        if (!cleanPhone) {
+                           toast.error('Representative contact number is not fully configured in the Admin panel.');
+                           return;
+                        }
+
                         // Construct state map and trigger submitting method
                         const formattedDateForDb = (() => {
                           const [year, month, day] = b2bDate.split('-');
@@ -5912,7 +6000,7 @@ export default function Menu({
                         if (pqMedio > 0) orderItems.push({ title: 'Medium Frozen Cheese Bread (1kg package)', quantity: pqMedio, price: 0, priceType: 'consult' as const });
                         if (pqPremium > 0) orderItems.push({ title: 'Large Premium Frozen Cheese Bread (1kg package)', quantity: pqPremium, price: 0, priceType: 'consult' as const });
 
-                        const b2bOrderDataObj = {
+                        const b2bOrderDataObj = cleanFirestoreObject({
                           customerName: b2bName,
                           phone: b2bPhone,
                           address: b2bAddress,
@@ -5923,6 +6011,7 @@ export default function Menu({
                           items: orderItems,
                           total: 0,
                           createdAt: serverTimestamp(),
+                          createdAtIso: new Date().toISOString(),
                           orderLanguage: 'en',
                           isB2B: true,
                           isPJ: true,
@@ -5930,10 +6019,14 @@ export default function Menu({
                           b2bFrequency: b2bFrequency,
                           b2bCompanyName: b2bName,
                           b2bAddress: b2bAddress
-                        };
+                        });
 
+                        setIsSubmitting(true);
                         try {
-                          addDoc(collection(db, 'pedidos'), b2bOrderDataObj);
+                          const docRef = await addDoc(collection(db, 'pedidos'), b2bOrderDataObj);
+                          await waitForPendingWrites(db);
+                          const shortOrderCode = docRef.id.slice(-6).toUpperCase();
+
                           localStorage.setItem('b2b_profile_save', JSON.stringify({
                             name: b2bName,
                             manager: b2bResponsibleName,
@@ -5944,6 +6037,7 @@ export default function Menu({
 
                           // Build message
                           let msg = `*B2B CORPORATE ORDER & QUOTATION*\n`;
+                          msg += `*Order Code:* #${shortOrderCode}\n`;
                           msg += `----------------------------------------\n`;
                           msg += `*Company:* ${b2bName}\n`;
                           msg += `*Manager:* ${b2bResponsibleName}\n`;
@@ -5959,10 +6053,9 @@ export default function Menu({
                           msg += `----------------------------------------\n`;
                           msg += `Hello! We would like to request B2B wholesale pricing and delivery scheduling. Thank you!`;
 
-                          const cleanPhone = getCleanWhatsAppPhone(settings.whatsappNumber || '', settings.whatsappCountryCode || '+55');
                           const sendUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(msg)}`;
                           
-                          toast.success('B2B Quote recorded! Redirecting to WhatsApp...');
+                          toast.success(`B2B Quote #${shortOrderCode} recorded! Redirecting to WhatsApp...`);
                           setIsDietsModalOpen(false);
 
                           try {
@@ -5975,12 +6068,15 @@ export default function Menu({
                           }
                         } catch (err) {
                           console.error(err);
-                          toast.error('Error recording order.');
+                          toast.error('Error recording order on server. Please try again.');
+                        } finally {
+                          setIsSubmitting(false);
                         }
                       }}
-                      className="w-full py-4 px-4 rounded-xl font-bold text-sm tracking-wider uppercase text-white bg-green-600 hover:bg-green-700 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md border-0"
+                      className="w-full py-4 px-4 rounded-xl font-bold text-sm tracking-wider uppercase text-white bg-green-600 hover:bg-green-700 disabled:opacity-60 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md border-0"
                     >
-                      <MessageCircle size={18} /> Enviar por WhatsApp
+                      {isSubmitting ? <Loader2 size={18} className="animate-spin" /> : <MessageCircle size={18} />}
+                      <span>{isSubmitting ? 'Salvando Pedido...' : 'Enviar por WhatsApp'}</span>
                     </button>
                   </div>
                 </div>

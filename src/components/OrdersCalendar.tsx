@@ -43,11 +43,61 @@ interface OrdersCalendarProps {
 
 type CalendarViewMode = 'grid' | 'agenda' | 'month';
 
+const STORE_TIMEZONE = 'America/Sao_Paulo';
+
+export function toBrazilWallClockDate(date: Date): Date {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: STORE_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+    const map: Record<string, number> = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = parseInt(p.value, 10);
+    }
+    const hour24 = map.hour === 24 ? 0 : (map.hour || 0);
+    if (map.year && map.month && map.day) {
+      return new Date(map.year, map.month - 1, map.day, hour24, map.minute || 0, map.second || 0);
+    }
+  } catch {
+    // Fallback to raw date
+  }
+  return date;
+}
+
+function extractCreatedDateRaw(order: Order): Date | null {
+  let d: Date | null = null;
+  if (typeof order.createdAt?.toDate === 'function') {
+    d = order.createdAt.toDate();
+  } else if (order.createdAt?.seconds) {
+    d = new Date(order.createdAt.seconds * 1000);
+  } else if (order.createdAt instanceof Date) {
+    d = order.createdAt;
+  } else if (typeof order.createdAt === 'string' || typeof order.createdAt === 'number') {
+    const parsed = new Date(order.createdAt);
+    if (!isNaN(parsed.getTime())) d = parsed;
+  }
+  if ((!d || isNaN(d.getTime())) && order.createdAtIso) {
+    const parsedIso = new Date(order.createdAtIso);
+    if (!isNaN(parsedIso.getTime())) d = parsedIso;
+  }
+  if (!d || isNaN(d.getTime())) return null;
+  return d;
+}
+
 // Helper to parse dates from various formats (MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, Timestamp)
 export function parseOrderDateTime(order: Order): { date: Date | null; timeStr: string; isPickup: boolean } {
   let targetDate: Date | null = null;
   let timeStr = '12:00 PM';
-  const isPickup = !order.address || order.address.toLowerCase().includes('retirada') || order.address.toLowerCase().includes('pickup');
+  const isPickup = order.deliveryType
+    ? order.deliveryType === 'pickup'
+    : (!order.address || order.address.toLowerCase().includes('retirada') || order.address.toLowerCase().includes('pickup'));
 
   // Try pickupDate first
   if (order.pickupDate && typeof order.pickupDate === 'string' && order.pickupDate.trim()) {
@@ -87,28 +137,18 @@ export function parseOrderDateTime(order: Order): { date: Date | null; timeStr: 
     }
   }
 
-  // Fallback to createdAt
-  if (!targetDate) {
-    if (order.createdAt?.toDate) {
-      targetDate = order.createdAt.toDate();
-    } else if (order.createdAt?.seconds) {
-      targetDate = new Date(order.createdAt.seconds * 1000);
-    } else if (order.createdAt instanceof Date) {
-      targetDate = order.createdAt;
-    } else if (typeof order.createdAt === 'string') {
-      const parsed = new Date(order.createdAt);
-      if (!isNaN(parsed.getTime())) {
-        targetDate = parsed;
-      }
-    }
+  const createdRaw = extractCreatedDateRaw(order);
+  const createdBrazil = createdRaw ? toBrazilWallClockDate(createdRaw) : null;
+
+  // Fallback to createdAt / createdAtIso (always normalized to America/Sao_Paulo)
+  if (!targetDate && createdBrazil) {
+    targetDate = createdBrazil;
   }
 
-  // If timeStr is still default and targetDate has time
+  // If timeStr is still default and created timestamp (or targetDate) has time
   if (targetDate && timeStr === '12:00 PM') {
-    const d = order.createdAt?.toDate 
-      ? order.createdAt.toDate() 
-      : (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000) : targetDate);
-    if (d && typeof d.getHours === 'function') {
+    const d = createdBrazil || targetDate;
+    if (d && typeof d.getHours === 'function' && !isNaN(d.getTime())) {
       let hours = d.getHours();
       const minutes = d.getMinutes();
       const ampm = hours >= 12 ? 'PM' : 'AM';
@@ -141,7 +181,7 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
   onEditOrder
 }) => {
   const [viewMode, setViewMode] = useState<CalendarViewMode>('grid');
-  const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
+  const [currentDate, setCurrentDate] = useState<Date>(() => toBrazilWallClockDate(new Date()));
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
   // Direct date editing state
@@ -231,7 +271,7 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
   };
 
   const handleToday = () => {
-    setCurrentDate(new Date());
+    setCurrentDate(toBrazilWallClockDate(new Date()));
   };
 
   // Map orders with parsed dates (incorporating optimistic overrides)
@@ -292,24 +332,36 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
     }
   }, [viewMode, weekDays, currentDate]);
 
-  // Hours for the grid (07:00 AM to 09:00 PM)
+  // Hours for the grid: always 07:00 AM to 09:00 PM, PLUS any outside hour (e.g. 00:00–06:59 or 22:00–23:59) that has orders
   const hoursList = useMemo(() => {
-    const hours = [];
+    const hourSet = new Set<number>();
     for (let h = 7; h <= 21; h++) {
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const displayH = h % 12 === 0 ? 12 : h % 12;
-      hours.push({
-        hour24: h,
-        label: `${displayH.toString().padStart(2, '0')}:00 ${ampm}`
-      });
+      hourSet.add(h);
     }
-    return hours;
-  }, []);
+    periodOrders.forEach(p => {
+      if (p.date) {
+        const h = getHourFromTimeString(p.timeStr);
+        if (h >= 0 && h <= 23) {
+          hourSet.add(h);
+        }
+      }
+    });
+    return Array.from(hourSet)
+      .sort((a, b) => a - b)
+      .map(h => {
+        const ampm = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 === 0 ? 12 : h % 12;
+        return {
+          hour24: h,
+          label: `${displayH.toString().padStart(2, '0')}:00 ${ampm}`
+        };
+      });
+  }, [periodOrders]);
 
   // Today check helper
   const isToday = (d: Date | null) => {
     if (!d) return false;
-    const today = new Date();
+    const today = toBrazilWallClockDate(new Date());
     return (
       d.getDate() === today.getDate() &&
       d.getMonth() === today.getMonth() &&
@@ -771,8 +823,7 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
           const { timeStr, isPickup } = parseOrderDateTime(selectedOrder);
           const cleanPhone = selectedOrder.phone ? getCleanWhatsAppPhone(selectedOrder.phone, settings?.whatsappCountryCode || '+55') : '';
           
-          const formatCreationDate = (createdAt: any): string => {
-            if (!createdAt) return 'Recentemente';
+          const formatCreationDate = (createdAt: any, createdAtIso?: string): string => {
             let d: Date | null = null;
             if (typeof createdAt?.toDate === 'function') {
               d = createdAt.toDate();
@@ -783,9 +834,13 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
             } else if (createdAt?.seconds) {
               d = new Date(createdAt.seconds * 1000);
             }
+            if ((!d || isNaN(d.getTime())) && createdAtIso) {
+              d = new Date(createdAtIso);
+            }
             if (!d || isNaN(d.getTime())) return 'Recentemente';
+            const br = toBrazilWallClockDate(d);
             const pad = (n: number) => n.toString().padStart(2, '0');
-            return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}, ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+            return `${pad(br.getDate())}/${pad(br.getMonth() + 1)}/${br.getFullYear()}, ${pad(br.getHours())}:${pad(br.getMinutes())}:${pad(br.getSeconds())}`;
           };
 
           const getDisplayDate = (order: Order): { text: string; isCreationDate: boolean } => {
@@ -802,21 +857,12 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
               return { text: raw, isCreationDate: false };
             }
 
-            // Fallback para a data em que o pedido foi recebido (createdAt)
-            let d: Date | null = null;
-            const createdAt = order.createdAt;
-            if (typeof createdAt?.toDate === 'function') {
-              d = createdAt.toDate();
-            } else if (createdAt instanceof Date) {
-              d = createdAt;
-            } else if (typeof createdAt === 'string' || typeof createdAt === 'number') {
-              d = new Date(createdAt);
-            } else if (createdAt?.seconds) {
-              d = new Date(createdAt.seconds * 1000);
-            }
-            if (d && !isNaN(d.getTime())) {
+            // Fallback para a data em que o pedido foi recebido (createdAt / createdAtIso)
+            const rawCreated = extractCreatedDateRaw(order);
+            if (rawCreated) {
+              const br = toBrazilWallClockDate(rawCreated);
               const pad = (n: number) => n.toString().padStart(2, '0');
-              return { text: `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`, isCreationDate: true };
+              return { text: `${pad(br.getDate())}/${pad(br.getMonth() + 1)}/${br.getFullYear()}`, isCreationDate: true };
             }
             return { text: 'Hoje', isCreationDate: true };
           };
@@ -929,7 +975,7 @@ export const OrdersCalendar: React.FC<OrdersCalendarProps> = ({
                         Detalhes do Pedido
                       </h2>
                       <p className="text-xs text-gray-500 font-sans mt-0.5 truncate">
-                        ID: <span className="font-mono text-gray-700">{selectedOrder.id}</span> • Criado em {formatCreationDate(selectedOrder.createdAt)}
+                        ID: <span className="font-mono text-gray-700">{selectedOrder.id}</span> • Criado em {formatCreationDate(selectedOrder.createdAt, selectedOrder.createdAtIso)}
                       </p>
                     </div>
                   </div>

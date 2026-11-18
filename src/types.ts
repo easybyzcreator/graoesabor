@@ -182,6 +182,7 @@ export interface Order {
   taxRate?: number;
   taxAmount?: number;
   createdAt: any;
+  createdAtIso?: string;
   orderLanguage?: string;
   paymentMethod?: string;
   paymentStatus?: 'pending' | 'half' | 'full';

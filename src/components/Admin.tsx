@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { db, auth } from '../firebase';
 import { 
   collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, setDoc, 
-  query, orderBy, writeBatch, serverTimestamp 
+  query, orderBy, writeBatch, serverTimestamp, getDocsFromServer 
 } from 'firebase/firestore';
 import { signInAnonymously } from 'firebase/auth';
 import { Product, Order, Settings, Category, Side, ImageGallery, VariableCost, DeliveryRange, ProductSize, QuickInstruction } from '../types';
@@ -11,7 +11,7 @@ import {
   Save, X, Copy, CheckCircle2, Loader2, Layers, Image as ImageIcon,
   ArrowUp, ArrowDown, MessageCircle, MessageSquare, Calendar, Printer, Cake, Eye, EyeOff, ArrowLeft,
   DollarSign, Coins, ChevronDown, ChevronUp, Users, Download, Truck, Search, Info, Table, ShoppingBag, Calculator,
-  MapPin, Navigation, ArrowUpDown, Lock, CreditCard
+  MapPin, Navigation, ArrowUpDown, Lock, CreditCard, RefreshCw, AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, removeUndefined } from '../lib/utils';
@@ -249,6 +249,9 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
   const [copied, setCopied] = useState(false);
   const [orderSearch, setOrderSearch] = useState('');
+  const [ordersSyncError, setOrdersSyncError] = useState<string | null>(null);
+  const [isRefreshingOrders, setIsRefreshingOrders] = useState(false);
+  const [lastOrdersSyncAt, setLastOrdersSyncAt] = useState<Date | null>(null);
   const [productSearch, setProductSearch] = useState('');
   const [selectedHistoryCatalog, setSelectedHistoryCatalog] = useState<'all' | 'catalog1' | 'catalog2' | 'catalog3' | 'catalog4' | 'catalog5' | 'catalog6'>('all');
   const [filterValidatedOnly, setFilterValidatedOnly] = useState(false);
@@ -642,6 +645,46 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     }));
   };
 
+  const getOrderTimestampMs = (o: Order): number => {
+    if (o.createdAt?.toDate) return o.createdAt.toDate().getTime();
+    if (o.createdAt?.seconds) return o.createdAt.seconds * 1000;
+    if (typeof o.createdAt === 'number' && Number.isFinite(o.createdAt)) return o.createdAt;
+    if (typeof o.createdAt === 'string') {
+      const parsed = Date.parse(o.createdAt);
+      if (!isNaN(parsed)) return parsed;
+    }
+    if (o.createdAtIso) {
+      const parsedIso = Date.parse(o.createdAtIso);
+      if (!isNaN(parsedIso)) return parsedIso;
+    }
+    return 0;
+  };
+
+  const formatOrderCreatedAt = (o: Order): string => {
+    const ms = getOrderTimestampMs(o);
+    if (!ms) return 'N/A';
+    return new Date(ms).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+  };
+
+  const refreshOrdersFromServer = async () => {
+    setIsRefreshingOrders(true);
+    try {
+      const snapshot = await getDocsFromServer(collection(db, 'pedidos'));
+      const loadedOrders = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Order));
+      loadedOrders.sort((a, b) => getOrderTimestampMs(b) - getOrderTimestampMs(a));
+      setOrders(loadedOrders);
+      setOrdersSyncError(null);
+      setLastOrdersSyncAt(new Date());
+      toast.success(`Pedidos sincronizados com o servidor (${loadedOrders.length} no total)!`);
+    } catch (error) {
+      console.error('Admin: Erro ao sincronizar pedidos:', error);
+      setOrdersSyncError('Falha ao buscar pedidos no servidor. Verifique sua conexão.');
+      toast.error('Erro ao sincronizar pedidos com o servidor.');
+    } finally {
+      setIsRefreshingOrders(false);
+    }
+  };
+
   useEffect(() => {
     if (!isLoggedIn) return;
     setLoading(true);
@@ -662,21 +705,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
     const unsubOrders = onSnapshot(collection(db, 'pedidos'), (snapshot) => {
       const loadedOrders = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Order));
-      loadedOrders.sort((a, b) => {
-        const getMs = (o: Order) => {
-          if (o.createdAt?.toDate) return o.createdAt.toDate().getTime();
-          if (o.createdAt?.seconds) return o.createdAt.seconds * 1000;
-          if (typeof o.createdAt === 'string') {
-            const parsed = Date.parse(o.createdAt);
-            if (!isNaN(parsed)) return parsed;
-          }
-          return 0;
-        };
-        return getMs(b) - getMs(a);
-      });
+      loadedOrders.sort((a, b) => getOrderTimestampMs(b) - getOrderTimestampMs(a));
       setOrders(loadedOrders);
+      setOrdersSyncError(null);
+      setLastOrdersSyncAt(new Date());
     }, (error) => {
       console.error('Admin: Erro ao carregar pedidos:', error);
+      setOrdersSyncError('Conexão em tempo real com os pedidos instável ou bloqueada. Clique em "Sincronizar Pedidos" para recarregar.');
+      toast.error('Erro na conexão em tempo real dos pedidos. Use "Sincronizar Pedidos".');
     });
 
     const unsubSides = onSnapshot(collection(db, 'acompanhamentos'), (snapshot) => {
@@ -2026,14 +2062,15 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const listTitle = orderTypeTab === 'b2b' 
       ? 'PEDIDOS CORPORATIVOS (B2B)' 
       : 'PEDIDOS VAREJO (RETAIL)';
-    const totalSum = filteredOrders.reduce((sum, o) => sum + o.total, 0);
+    const totalSum = filteredOrders.reduce((sum, o) => sum + Number(o.total || 0), 0);
     const brand = settings?.brandName || 'Grão & Sabor';
 
     if (format === 'a4') {
       const rowsHtml = filteredOrders.map((order, index) => {
-        const name = order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName;
+        const name = (order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName) || 'Cliente';
         const deliveryDate = order.pickupDate ? order.pickupDate : 'N/A';
-        const itemsSummary = order.items.map(item => `${item.quantity}x ${item.title}`).join(', ');
+        const safeItems = Array.isArray(order.items) ? order.items : [];
+        const itemsSummary = safeItems.map(item => `${item.quantity || 1}x ${item.title}`).join(', ');
 
         return `
           <tr>
@@ -2042,7 +2079,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <td>${order.phone || '-'}</td>
             <td>${order.deliveryType === 'pickup' ? 'Retirada' : 'Entrega'} • ${deliveryDate}</td>
             <td style="font-size: 11px; color: #4b5563;">${itemsSummary}</td>
-            <td style="text-align: right; font-weight: bold;">${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}</td>
+            <td style="text-align: right; font-weight: bold;">${currencySymbol} ${Number(order.total || 0).toFixed(2).replace('.', ',')}</td>
           </tr>
         `;
       }).join('');
@@ -2124,19 +2161,20 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const printWidth = is80 ? '72mm' : '48mm';
 
     const contentHtml = filteredOrders.map((order, index) => {
-      const itemsText = order.items.map(item => `  ${item.quantity}x ${item.title}${item.selectedSize ? ` (${item.selectedSize.name})` : ''}`).join('\n');
-      const name = order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName;
+      const safeItems = Array.isArray(order.items) ? order.items : [];
+      const itemsText = safeItems.map(item => `  ${item.quantity || 1}x ${item.title}${item.selectedSize ? ` (${item.selectedSize.name})` : ''}`).join('\n');
+      const name = (order.isB2B || order.isPJ ? (order.b2bCompanyName || order.customerName) : order.customerName) || 'Cliente';
       const deliveryDate = order.pickupDate ? order.pickupDate : 'N/A';
       
       return `
         <div class="order-block">
           <div class="order-header">#${index + 1} - ${name.toUpperCase()}</div>
           <div class="order-details">
-            TEL: ${order.phone}<br/>
+            TEL: ${order.phone || '-'}<br/>
             ENTREGA: ${deliveryDate}
           </div>
           <div class="order-items">${itemsText}</div>
-          <div class="order-total">TOTAL: ${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}</div>
+          <div class="order-total">TOTAL: ${currencySymbol} ${Number(order.total || 0).toFixed(2).replace('.', ',')}</div>
         </div>
       `;
     }).join('');
@@ -2568,8 +2606,11 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
   const printOrder = (order: Order, formatOverride?: 'a4' | '58mm' | '80mm') => {
     const format = formatOverride || settings?.printerFormat || 'a4';
-    const dateStr = order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('pt-BR') : 'N/A';
+    const dateStr = formatOrderCreatedAt(order);
     const brand = settings?.brandName || 'Grão & Sabor';
+    const safeOrderItems = Array.isArray(order.items) ? order.items : [];
+    const safeCustomerName = order.customerName || order.b2bCompanyName || 'Cliente';
+    const safeOrderTotal = Number(order.total || 0);
     const escapeHtml = (val?: string | number | null) =>
       String(val ?? '')
         .replace(/&/g, '&amp;')
@@ -2669,14 +2710,16 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     };
 
     if (format === 'a4') {
-      const itemsRowsHtml = order.items.map(item => {
+      const itemsRowsHtml = safeOrderItems.map(item => {
         const optionsHtml = buildItemDetailsHtml(item, false);
-        const unitPrice = item.price.toFixed(2).replace('.', ',');
-        const totalItemPrice = (item.price * item.quantity).toFixed(2).replace('.', ',');
+        const itemPrice = Number(item.price || 0);
+        const itemQty = Number(item.quantity || 1);
+        const unitPrice = itemPrice.toFixed(2).replace('.', ',');
+        const totalItemPrice = (itemPrice * itemQty).toFixed(2).replace('.', ',');
 
         return `
           <tr>
-            <td style="text-align: center; font-weight: bold; width: 45px;">${item.quantity}x</td>
+            <td style="text-align: center; font-weight: bold; width: 45px;">${itemQty}x</td>
             <td>
               <div class="item-title">${getItemDisplayTitle(item, false)}</div>
               ${optionsHtml}
@@ -2692,7 +2735,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
         <html>
           <head>
             <meta charset="utf-8">
-            <title>Comanda #${order.id} - ${order.customerName}</title>
+            <title>Comanda #${order.id} - ${safeCustomerName}</title>
             <style>
               @page { size: A4 portrait; margin: 12mm 15mm; }
               @media print {
@@ -2868,7 +2911,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             <div class="client-box">
               <div class="client-item">
                 <strong>Cliente</strong>
-                <span>${order.customerName.toUpperCase()}</span>
+                <span>${escapeHtml(safeCustomerName.toUpperCase())}</span>
               </div>
               <div class="client-item">
                 <strong>Telefone</strong>
@@ -2948,11 +2991,11 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 ${(order.deliveryFee !== undefined && order.deliveryFee > 0) ? `
                 <tr>
                   <td style="color: #4b5563;">Subtotal:</td>
-                  <td style="text-align: right; font-weight: 600;">${currencySymbol} ${(order.subtotal || (order.total - order.deliveryFee)).toFixed(2).replace('.', ',')}</td>
+                  <td style="text-align: right; font-weight: 600;">${currencySymbol} ${Number(order.subtotal || (safeOrderTotal - Number(order.deliveryFee || 0))).toFixed(2).replace('.', ',')}</td>
                 </tr>
                 <tr>
                   <td style="color: #4b5563;">Taxa de Entrega:</td>
-                  <td style="text-align: right; font-weight: 600;">+ ${currencySymbol} ${order.deliveryFee.toFixed(2).replace('.', ',')}</td>
+                  <td style="text-align: right; font-weight: 600;">+ ${currencySymbol} ${Number(order.deliveryFee || 0).toFixed(2).replace('.', ',')}</td>
                 </tr>
                 ` : order.deliveryType === 'pickup' ? `
                 <tr>
@@ -2962,7 +3005,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 ` : ''}
                 <tr class="total-row">
                   <td>TOTAL:</td>
-                  <td style="text-align: right;">${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}</td>
+                  <td style="text-align: right;">${currencySymbol} ${safeOrderTotal.toFixed(2).replace('.', ',')}</td>
                 </tr>
               </table>
             </div>
@@ -2986,14 +3029,16 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     const metaFont = is80 ? '11pt' : '10.5pt';
     const totalFont = is80 ? '15pt' : '14pt';
 
-    let itemsHtml = order.items.map(item => {
+    let itemsHtml = safeOrderItems.map(item => {
       const optionsHtml = buildItemDetailsHtml(item, true);
+      const itemPrice = Number(item.price || 0);
+      const itemQty = Number(item.quantity || 1);
 
       return `
         <div class="item-row">
           <div class="item-main">
-            <span class="item-name">${item.quantity}x ${getItemDisplayTitle(item, true)}</span>
-            <span class="item-price">${currencySymbol} ${(item.price * item.quantity).toFixed(2).replace('.', ',')}</span>
+            <span class="item-name">${itemQty}x ${getItemDisplayTitle(item, true)}</span>
+            <span class="item-price">${currencySymbol} ${(itemPrice * itemQty).toFixed(2).replace('.', ',')}</span>
           </div>
           ${optionsHtml}
         </div>
@@ -3005,7 +3050,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     printWithIframe(`
       <html>
         <head>
-          <title>Comanda - ${escapeHtml(order.customerName)}</title>
+          <title>Comanda - ${escapeHtml(safeCustomerName)}</title>
           <style>
             @page { size: ${paperWidth} auto; margin: 0; }
             @media print {
@@ -3057,7 +3102,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           
           <div class="section">
             <span class="label">CLIENTE:</span>
-            <span class="value">${escapeHtml(order.customerName.toUpperCase())}</span>
+            <span class="value">${escapeHtml(safeCustomerName.toUpperCase())}</span>
           </div>
 
           ${(order.isB2B || order.isPJ) && order.b2bCompanyName ? `
@@ -3149,8 +3194,8 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
           
           ${(order.deliveryFee !== undefined && order.deliveryFee > 0) ? `
           <div class="total-section">
-            <div>SUBTOTAL: ${currencySymbol} ${(order.subtotal || (order.total - (order.deliveryFee || 0))).toFixed(2).replace('.', ',')}</div>
-            <div style="margin-top: 2px;">TAXA ENTREGA ${order.deliveryDistanceKm ? `(${order.deliveryDistanceKm} km)` : ''}: + ${currencySymbol} ${order.deliveryFee.toFixed(2).replace('.', ',')}</div>
+            <div>SUBTOTAL: ${currencySymbol} ${Number(order.subtotal || (safeOrderTotal - Number(order.deliveryFee || 0))).toFixed(2).replace('.', ',')}</div>
+            <div style="margin-top: 2px;">TAXA ENTREGA ${order.deliveryDistanceKm ? `(${order.deliveryDistanceKm} km)` : ''}: + ${currencySymbol} ${Number(order.deliveryFee || 0).toFixed(2).replace('.', ',')}</div>
           </div>
           ` : order.deliveryType === 'pickup' ? `
           <div class="total-section">
@@ -3160,12 +3205,12 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
           ${(order.taxAmount !== undefined && order.taxAmount > 0) ? `
           <div class="total-section">
-            <div>TAXAS (${order.taxRate || 0}%): + ${currencySymbol} ${order.taxAmount.toFixed(2).replace('.', ',')}</div>
+            <div>TAXAS (${order.taxRate || 0}%): + ${currencySymbol} ${Number(order.taxAmount || 0).toFixed(2).replace('.', ',')}</div>
           </div>
           ` : ''}
           
           <div class="total">
-            TOTAL: ${currencySymbol} ${order.total.toFixed(2).replace('.', ',')}
+            TOTAL: ${currencySymbol} ${safeOrderTotal.toFixed(2).replace('.', ',')}
           </div>
 
           <div class="footer-receipt">
@@ -3380,8 +3425,17 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
 
   const filteredOrders = orders.filter(order => {
     const custName = (order.customerName || order.b2bCompanyName || '').toLowerCase();
-    const query = orderSearch.toLowerCase().trim();
-    const matchesSearch = !query || custName.includes(query) || (order.phone || '').includes(query) || (order.id || '').toLowerCase().includes(query);
+    const rawQuery = orderSearch.toLowerCase().trim();
+    const normalizedCodeQuery = rawQuery.startsWith('#') ? rawQuery.slice(1) : rawQuery;
+    const phoneDigits = (order.phone || '').replace(/\D/g, '');
+    const queryDigits = rawQuery.replace(/\D/g, '');
+    const matchesSearch =
+      !rawQuery ||
+      custName.includes(rawQuery) ||
+      (order.phone || '').toLowerCase().includes(rawQuery) ||
+      (queryDigits.length >= 3 && phoneDigits.includes(queryDigits)) ||
+      (order.id || '').toLowerCase().includes(normalizedCodeQuery) ||
+      (order.items || []).some(item => (item.title || '').toLowerCase().includes(rawQuery));
     
     const parseDateString = (str: string, _lang?: string) => {
       if (!str || !str.includes('/')) return null;
@@ -3412,13 +3466,9 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
       }
       
       if (!orderDate) {
-        if (order.createdAt?.toDate) {
-          orderDate = order.createdAt.toDate();
-        } else if (order.createdAt?.seconds) {
-          orderDate = new Date(order.createdAt.seconds * 1000);
-        } else if (typeof order.createdAt === 'string') {
-          const parsed = Date.parse(order.createdAt);
-          if (!isNaN(parsed)) orderDate = new Date(parsed);
+        const ms = getOrderTimestampMs(order);
+        if (ms) {
+          orderDate = new Date(ms);
         }
       }
 
@@ -3443,18 +3493,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
     }
     
     return matchesSearch && matchesDate && matchesValidated;
-  }).sort((a, b) => {
-    const getMs = (o: Order) => {
-      if (o.createdAt?.toDate) return o.createdAt.toDate().getTime();
-      if (o.createdAt?.seconds) return o.createdAt.seconds * 1000;
-      if (typeof o.createdAt === 'string') {
-        const parsed = Date.parse(o.createdAt);
-        if (!isNaN(parsed)) return parsed;
-      }
-      return 0;
-    };
-    return getMs(b) - getMs(a);
-  });
+  }).sort((a, b) => getOrderTimestampMs(b) - getOrderTimestampMs(a));
 
   const batchSummary = useMemo(() => {
     const summary: { [key: string]: number } = {};
@@ -7798,8 +7837,25 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
             />
 
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <h2 className="text-3xl font-serif font-bold">Histórico de Pedidos</h2>
+              <div className="space-y-1">
+                <h2 className="text-3xl font-serif font-bold">Histórico de Pedidos</h2>
+                {lastOrdersSyncAt && (
+                  <p className="text-[11px] font-semibold text-gray-500">
+                    Última atualização: {lastOrdersSyncAt.toLocaleTimeString('pt-BR')}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={refreshOrdersFromServer}
+                  disabled={isRefreshingOrders}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl font-bold text-sm bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                  title="Buscar pedidos mais recentes direto do servidor"
+                >
+                  <RefreshCw size={17} className={isRefreshingOrders ? 'animate-spin' : ''} />
+                  {isRefreshingOrders ? 'Sincronizando...' : 'Sincronizar Pedidos'}
+                </button>
                 <button 
                   onClick={() => {
                     setManualOrderForm({
@@ -7923,10 +7979,26 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
               </div>
             </div>
 
+            {ordersSyncError && (
+              <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 text-sm font-bold">
+                  <AlertCircle size={18} className="text-red-600 shrink-0" />
+                  <span>{ordersSyncError}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={refreshOrdersFromServer}
+                  className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs font-bold cursor-pointer self-start sm:self-auto"
+                >
+                  Tentar Novamente
+                </button>
+              </div>
+            )}
+
             <div className="glass p-4 rounded-2xl flex flex-col gap-2">
               <input 
                 type="text" 
-                placeholder="Buscar por nome do cliente, telefone ou ID..."
+                placeholder="Buscar por nome do cliente, telefone, produto ou código (#)..."
                 className="w-full p-3 rounded-xl border border-gray-300 bg-white"
                 value={orderSearch}
                 onChange={e => setOrderSearch(e.target.value)}
@@ -8003,11 +8075,14 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                 >
                   <div className="flex flex-col md:flex-row justify-between gap-4">
                     <div className="space-y-1">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <span className="text-xs font-mono font-black px-2 py-0.5 bg-black/5 rounded text-gray-700 border border-black/10">
+                          #{(order.id || '').slice(-6).toUpperCase()}
+                        </span>
                         <h3 className="text-xl font-serif font-bold text-black">
                           {order.isB2B || order.isPJ 
-                            ? (order.b2bCompanyName || order.customerName)
-                            : order.customerName
+                            ? (order.b2bCompanyName || order.customerName || 'Empresa')
+                            : (order.customerName || 'Cliente')
                           }
                         </h3>
                         {(order.isB2B || order.isPJ) && (
@@ -8023,15 +8098,15 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                       </div>
                       <div className="flex flex-wrap gap-4 text-sm text-gray-700 font-medium">
                         <a 
-                          href={`https://wa.me/${getCleanWhatsAppPhone(order.phone)}`} 
+                          href={`https://wa.me/${getCleanWhatsAppPhone(order.phone || '')}`} 
                           target="_blank" 
                           rel="noopener noreferrer"
                           className="flex items-center gap-1 hover:text-green-600 transition-colors font-bold text-black"
                         >
-                          <MessageCircle size={14} className="text-green-600" /> {order.phone}
+                          <MessageCircle size={14} className="text-green-600" /> {order.phone || '-'}
                         </a>
                         <span className="flex items-center gap-1">
-                          <Calendar size={14} /> Criado em: {order.createdAt?.toDate ? order.createdAt.toDate().toLocaleString('pt-BR') : (order.createdAt?.seconds ? new Date(order.createdAt.seconds * 1000).toLocaleString('pt-BR') : (order.createdAt ? new Date(order.createdAt as any).toLocaleString('pt-BR') : 'N/A'))}
+                          <Calendar size={14} /> Criado em: {formatOrderCreatedAt(order)}
                         </span>
                         {order.pickupDate && (
                           <span 
@@ -8143,7 +8218,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                           Total do Pedido
                         </div>
                         <div className="text-xl font-extrabold" style={{ color: settings?.primaryColor || '#865d39' }}>
-                          {currencySymbol} {order.total.toFixed(2).replace('.', ',')}
+                          {currencySymbol} {Number(order.total || 0).toFixed(2).replace('.', ',')}
                         </div>
                       </div>
                     </div>
@@ -8158,7 +8233,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                         className="overflow-hidden space-y-4"
                       >
                         <div className="bg-white rounded-xl p-4 space-y-3 border border-gray-200 shadow-sm">
-                          {order.items.map((item, idx) => (
+                          {(Array.isArray(order.items) ? order.items : []).map((item, idx) => (
                             <div key={idx} className="flex justify-between items-start border-b border-black/5 last:border-0 pb-2 last:pb-0">
                               <div className="space-y-1">
                                 <div className="font-bold text-black">{item.quantity}x {item.title}{item.selectedSize && !item.title.includes(`(${item.selectedSize.name})`) ? ` (${item.selectedSize.name})` : ''}</div>
@@ -8207,25 +8282,25 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                   </div>
                                 )}
                               </div>
-                              <div className="font-bold text-black">{currencySymbol} {(item.price * item.quantity).toFixed(2).replace('.', ',')}</div>
+                              <div className="font-bold text-black">{currencySymbol} {(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2).replace('.', ',')}</div>
                             </div>
                           ))}
                           
-                          {order.total > 0 && !(order.isB2B || order.isPJ) && (
+                          {Number(order.total || 0) > 0 && !(order.isB2B || order.isPJ) && (
                             <div className="border-t border-black/10 pt-3 mt-3 space-y-1.5 text-xs text-black font-semibold">
                               {(order.taxAmount && order.taxAmount > 0) ? (
                                 <>
                                   <div className="flex justify-between">
                                     <span className="text-gray-600 font-medium">Subtotal:</span>
-                                    <span>{currencySymbol} {(order.subtotal || (order.total - order.taxAmount)).toFixed(2).replace('.', ',')}</span>
+                                    <span>{currencySymbol} {Number(order.subtotal || (Number(order.total || 0) - Number(order.taxAmount || 0))).toFixed(2).replace('.', ',')}</span>
                                   </div>
                                   <div className="flex justify-between text-amber-900">
                                     <span className="text-gray-600 font-medium">Sales Tax ({order.taxRate || 8.25}%):</span>
-                                    <span>+ {currencySymbol} {order.taxAmount.toFixed(2).replace('.', ',')}</span>
+                                    <span>+ {currencySymbol} {Number(order.taxAmount || 0).toFixed(2).replace('.', ',')}</span>
                                   </div>
                                   <div className="flex justify-between text-base font-extrabold border-t border-black/5 pt-1.5" style={{ color: settings?.primaryColor || '#865d39' }}>
                                     <span>Total com Tax:</span>
-                                    <span>{currencySymbol} {order.total.toFixed(2).replace('.', ',')}</span>
+                                    <span>{currencySymbol} {Number(order.total || 0).toFixed(2).replace('.', ',')}</span>
                                   </div>
                                 </>
                               ) : (
@@ -8234,13 +8309,13 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                     <>
                                       <div className="flex justify-between">
                                         <span className="text-gray-600 font-medium">Subtotal dos Itens:</span>
-                                        <span>{currencySymbol} {(order.subtotal || (order.total - order.deliveryFee)).toFixed(2).replace('.', ',')}</span>
+                                        <span>{currencySymbol} {Number(order.subtotal || (Number(order.total || 0) - Number(order.deliveryFee || 0))).toFixed(2).replace('.', ',')}</span>
                                       </div>
                                       <div className="flex justify-between text-blue-800">
                                         <span className="text-gray-600 font-medium flex items-center gap-1">
                                           <Truck size={13} /> Frete ({order.deliveryDistanceKm ? `${order.deliveryDistanceKm} km` : 'KM'}):
                                         </span>
-                                        <span>+ {currencySymbol} {order.deliveryFee.toFixed(2).replace('.', ',')}</span>
+                                        <span>+ {currencySymbol} {Number(order.deliveryFee || 0).toFixed(2).replace('.', ',')}</span>
                                       </div>
                                     </>
                                   ) : order.deliveryType === 'pickup' ? (
@@ -8253,7 +8328,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                                   ) : null}
                                   <div className="flex justify-between text-base font-extrabold pt-1.5" style={{ color: settings?.primaryColor || '#865d39' }}>
                                     <span>Total:</span>
-                                    <span>{currencySymbol} {order.total.toFixed(2).replace('.', ',')}</span>
+                                    <span>{currencySymbol} {Number(order.total || 0).toFixed(2).replace('.', ',')}</span>
                                   </div>
                                 </div>
                               )}
@@ -10272,16 +10347,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                             #{order.id.slice(-6).toUpperCase()}
                           </span>
                           <span className="text-xs opacity-60 font-medium">
-                            {(() => {
-                              const c = order.createdAt;
-                              let d: Date | null = null;
-                              if (typeof c?.toDate === 'function') d = c.toDate();
-                              else if (c instanceof Date) d = c;
-                              else if (typeof c === 'string' || typeof c === 'number') d = new Date(c);
-                              else if (c?.seconds) d = new Date(c.seconds * 1000);
-                              if (!d || isNaN(d.getTime())) return 'N/A';
-                              return d.toLocaleString('pt-BR');
-                            })()}
+                            {formatOrderCreatedAt(order)}
                           </span>
                           {order.pickupDate && (
                             <span 
@@ -10294,22 +10360,22 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                         </div>
 
                         <div className="space-y-1 text-sm">
-                          {order.items.map((item, idx) => (
+                          {(Array.isArray(order.items) ? order.items : []).map((item, idx) => (
                             <div key={idx} className="flex justify-between font-medium">
-                              <span>{item.quantity}x {item.title}</span>
-                              <span className="opacity-60">{currencySymbol} {((item.price || 0) * item.quantity).toFixed(2).replace('.', ',')}</span>
+                              <span>{item.quantity || 1}x {item.title}</span>
+                              <span className="opacity-60">{currencySymbol} {(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2).replace('.', ',')}</span>
                             </div>
                           ))}
                           
-                          {(order.taxAmount && order.taxAmount > 0 && order.total > 0) ? (
+                          {(order.taxAmount && order.taxAmount > 0 && Number(order.total || 0) > 0) ? (
                             <div className="border-t border-black/5 pt-2 space-y-1 text-xs text-black/60 font-semibold">
                               <div className="flex justify-between">
                                 <span className="opacity-60">Subtotal:</span>
-                                <span>{currencySymbol} {(order.subtotal || (order.total - order.taxAmount)).toFixed(2).replace('.', ',')}</span>
+                                <span>{currencySymbol} {Number(order.subtotal || (Number(order.total || 0) - Number(order.taxAmount || 0))).toFixed(2).replace('.', ',')}</span>
                               </div>
                               <div className="flex justify-between text-amber-900">
                                 <span className="opacity-60">Sales Tax ({order.taxRate || 8.25}%):</span>
-                                <span>+ {currencySymbol} {order.taxAmount.toFixed(2).replace('.', ',')}</span>
+                                <span>+ {currencySymbol} {Number(order.taxAmount || 0).toFixed(2).replace('.', ',')}</span>
                               </div>
                             </div>
                           ) : null}
@@ -10326,7 +10392,7 @@ export default function Admin({ settings, setSettings, setIsAdmin }: {
                         <div className="text-right">
                           <span className="text-[10px] uppercase font-bold opacity-40 block">Valor Pago</span>
                           <span className="text-lg font-black" style={{ color: settings?.primaryColor || '#865d39' }}>
-                            {currencySymbol} {order.total.toFixed(2).replace('.', ',')}
+                            {currencySymbol} {Number(order.total || 0).toFixed(2).replace('.', ',')}
                           </span>
                         </div>
                         <div className="flex gap-2">
